@@ -1,4 +1,4 @@
-# LandClaims Plugin - Development Context
+# EasyClaims Plugin - Development Context
 
 ## Project Overview
 A chunk-based land claiming plugin for Hytale servers with playtime-based limits and trust system.
@@ -113,9 +113,9 @@ plugins/PluginName/
 ```json
 {
     "Group": "Community",
-    "Name": "LandClaims",
+    "Name": "EasyClaims",
     "Version": "1.0.0",
-    "Main": "com.landclaims.LandClaims",
+    "Main": "com.easyclaims.EasyClaims",
     "Description": "Description here",
     "Authors": [],
     "Dependencies": {}
@@ -346,10 +346,10 @@ Block protection not working - untrusted players can still break/place/use block
 
 ### Debug Logs Added
 Check server console for:
-- `[LandClaims] PlayerInteractEvent:` - player interactions
-- `[LandClaims] BreakBlockEvent fired` - if ECS system is called
-- `[LandClaims] CANCELLING` - if protection logic runs
-- `[LandClaims] Registered *System` - if systems register successfully
+- `[EasyClaims] PlayerInteractEvent:` - player interactions
+- `[EasyClaims] BreakBlockEvent fired` - if ECS system is called
+- `[EasyClaims] CANCELLING` - if protection logic runs
+- `[EasyClaims] Registered *System` - if systems register successfully
 
 ### Possible Issues to Investigate
 1. Are ECS systems being called at all? (Check logs)

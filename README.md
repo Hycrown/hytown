@@ -1,231 +1,227 @@
-# LandClaims
+# EasyClaims
 
-A chunk-based land claiming plugin for Hytale servers with playtime-based claim limits and granular trust permissions.
+Protect your builds on Hytale servers! Claim land, see it on your map, and share with friends.
+
+## Quick Start
+
+1. **Install**: Drop `EasyClaims-1.0.0.jar` into your server's `mods/` folder
+2. **Restart** your server
+3. **Claim land**: Stand where you want to protect and type `/claim`
+4. **See your claims**: Open your map (M) - claimed chunks show in color!
+
+That's it! Your builds are now protected.
+
+---
 
 ## Features
 
-- **Chunk-based claims** - Claim 16x16 chunk areas to protect your builds
-- **Playtime rewards** - More playtime = more claim chunks available
-- **Granular trust system** - Give players different permission levels (doors only, chests, full build access)
-- **Configurable block groups** - Define which blocks require which permission level
-- **Full protection** - Prevents breaking, placing, damaging, and using blocks in claimed areas
-- **Backward compatible** - Existing claim data is automatically migrated
+- **Visual Map Integration** - Claimed chunks appear colored on the world map
+- **Playtime Rewards** - Play longer, claim more land
+- **Share With Friends** - Trust players with different permission levels
+- **Full Protection** - Blocks breaking, placing, and interactions from strangers
 
-## Installation
-
-1. Build the plugin or download from releases
-2. Place `LandClaims-1.0.0.jar` in your Hytale server's `mods/` folder
-3. Restart the server
-4. Config files will be created in `mods/Community_LandClaims/`
+---
 
 ## Commands
 
-### Claiming
+### Essential Commands
 
-| Command | Permission | Description |
-|---------|------------|-------------|
-| `/claim` | `landclaims.claim` | Claim the chunk you're standing in |
-| `/unclaim` | `landclaims.unclaim` | Unclaim the chunk you're standing in |
-| `/unclaimall` | `landclaims.unclaimall` | Remove all your claims |
-| `/claims` | `landclaims.list` | List all your claims with coordinates |
+| Command | What it does |
+|---------|--------------|
+| `/claim` | Claim the chunk you're standing in |
+| `/unclaim` | Remove your claim on current chunk |
+| `/claims` | List all your claimed chunks |
+| `/claimhelp` | Show all available commands |
 
-### Trust System
+### Sharing With Friends
 
-| Command | Permission | Description |
-|---------|------------|-------------|
-| `/trust <player> [level]` | `landclaims.trust` | Trust a player with optional permission level |
-| `/untrust <player>` | `landclaims.untrust` | Remove trust from a player |
-| `/trustlist` | `landclaims.trustlist` | List all trusted players and their levels |
+| Command | What it does |
+|---------|--------------|
+| `/trust PlayerName` | Give full access to a player |
+| `/trust PlayerName use` | Let them use doors/buttons only |
+| `/trust PlayerName container` | Let them open chests too |
+| `/untrust PlayerName` | Remove a player's access |
+| `/trustlist` | See who you've trusted |
 
-### Info
+### Other Commands
 
-| Command | Permission | Description |
-|---------|------------|-------------|
-| `/playtime` | `landclaims.playtime` | Show your playtime and available claims |
-| `/claimhelp` | `landclaims.help` | Show help information |
+| Command | What it does |
+|---------|--------------|
+| `/unclaimall` | Remove ALL your claims (careful!) |
+| `/playtime` | Check your playtime and claim slots |
 
-## Trust Levels
+### Admin Commands
 
-Trust levels are hierarchical - higher levels include all permissions from lower levels.
+| Command | What it does |
+|---------|--------------|
+| `/easyclaims config` | Show current settings |
+| `/easyclaims set <key> <value>` | Change a setting (saves immediately) |
+| `/easyclaims reload` | Reload config from file |
 
-| Level | Command | Description | Allows |
-|-------|---------|-------------|--------|
-| 1 | `/trust Player use` | Basic interaction | Doors, buttons, levers, trapdoors, fence gates, pressure plates |
-| 2 | `/trust Player container` | Storage access | + Chests, barrels, shulker boxes, hoppers, dispensers |
-| 3 | `/trust Player workstation` | Crafting access | + Crafting tables, furnaces, anvils, brewing stands, enchanting tables |
-| 4 | `/trust Player damage` | Block damage | + Can damage/mine blocks (but not fully break) |
-| 5 | `/trust Player build` | Full access | + Can break and place blocks (default if no level specified) |
-
-### Examples
-
+**Example:**
 ```
-/trust Steve use         # Steve can only use doors and buttons
-/trust Alex container    # Alex can open chests but not build
-/trust Bob build         # Bob has full access (same as /trust Bob)
-/trust Steve workstation # Update Steve's access to workstation level
+/easyclaims set maxClaims 100
+/easyclaims set startingClaims 6
+/easyclaims set claimsPerHour 3
 ```
 
-## Player Lookup
+---
 
-The `/trust` and `/untrust` commands accept:
-- **Player names** - For online players (case-insensitive)
-- **UUIDs** - For offline players
+## Trust Levels Explained
+
+When you `/trust` someone, you can choose how much access they get:
+
+| Level | Command Example | What They Can Do |
+|-------|-----------------|------------------|
+| **use** | `/trust Steve use` | Open doors, press buttons, flip levers |
+| **container** | `/trust Steve container` | Above + open chests, barrels |
+| **workstation** | `/trust Steve workstation` | Above + use furnaces, crafting tables |
+| **build** | `/trust Steve build` | Full access - can break and place blocks |
+
+**Note:** If you don't specify a level, players get full `build` access.
+
+**Tip:** Use `/trust PlayerName use` for visitors who just need to get through doors!
+
+---
+
+## How Claims Work
+
+- Each claim protects a **32x32 block area** (one chunk)
+- Claims extend from bedrock to sky - full vertical protection
+- You start with **4 claim slots** and earn more by playing
+- Open your **world map (M)** to see claims highlighted in color
+- Your claims show in your unique color, others show in theirs
+
+### Earning More Claims
+
+The longer you play, the more land you can claim:
+
+| Playtime | Total Claim Slots |
+|----------|-------------------|
+| New player | 4 chunks |
+| 1 hour | 6 chunks |
+| 5 hours | 14 chunks |
+| 10 hours | 24 chunks |
+
+Use `/playtime` to check your progress!
+
+---
+
+## Installation
+
+### For Server Owners
+
+1. Download `EasyClaims-1.0.0.jar`
+2. Place it in your server's `mods/` folder
+3. Restart the server
+4. Config files appear in `mods/Community_EasyClaims/`
+
+### Setting Up Permissions
+
+Grant these permissions to let players use the plugin:
 
 ```
-/trust PlayerName build     # Trust online player by name
-/trust 12345678-1234-...    # Trust offline player by UUID
-/untrust PlayerName         # Works if online OR if previously trusted
+perm group add Adventure easyclaims.claim
+perm group add Adventure easyclaims.unclaim
+perm group add Adventure easyclaims.unclaimall
+perm group add Adventure easyclaims.list
+perm group add Adventure easyclaims.trust
+perm group add Adventure easyclaims.untrust
+perm group add Adventure easyclaims.trustlist
+perm group add Adventure easyclaims.playtime
+perm group add Adventure easyclaims.help
+perm group add admin easyclaims.admin
 ```
+
+---
 
 ## Configuration
 
-### Main Config: `config.json`
+Config files are in `mods/Community_EasyClaims/`.
 
-Located in `mods/Community_LandClaims/config.json`:
-
-```json
-{
-  "chunksPerHour": 2,
-  "startingChunks": 4,
-  "maxClaimsPerPlayer": 50,
-  "playtimeUpdateIntervalSeconds": 60
-}
-```
-
-| Setting | Description |
-|---------|-------------|
-| `chunksPerHour` | How many additional chunks per hour of playtime |
-| `startingChunks` | Chunks available to new players |
-| `maxClaimsPerPlayer` | Maximum claims regardless of playtime |
-| `playtimeUpdateIntervalSeconds` | How often to save playtime data |
-
-### Block Groups: `block_groups.json`
-
-Defines which blocks require which trust level. Uses pattern matching (if block ID contains the pattern).
+### config.json - Main Settings
 
 ```json
 {
-  "useBlocks": [],
-  "usePatterns": [
-    "door", "button", "lever", "pressure_plate",
-    "gate", "trapdoor", "switch", "bell"
-  ],
-  "containerBlocks": [],
-  "containerPatterns": [
-    "chest", "barrel", "crate", "container",
-    "storage", "hopper", "dispenser", "dropper", "shulker"
-  ],
-  "workstationBlocks": [],
-  "workstationPatterns": [
-    "crafting", "workbench", "furnace", "smoker", "blast",
-    "anvil", "grindstone", "loom", "cartography", "smithing",
-    "stonecutter", "brewing", "enchant", "cauldron", "composter", "lectern"
-  ]
+  "startingClaims": 4,
+  "claimsPerHour": 2,
+  "maxClaims": 50,
+  "playtimeSaveInterval": 60
 }
 ```
 
-**Adding Custom Blocks:**
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `startingClaims` | 4 | Claims available to new players |
+| `claimsPerHour` | 2 | Extra claims earned per hour played |
+| `maxClaims` | 50 | Maximum claims anyone can have |
 
-As you discover Hytale block IDs, add them to the appropriate list:
+**Formula:** `startingClaims + (hoursPlayed × claimsPerHour)`, max `maxClaims`
 
-- `useBlocks` / `containerBlocks` / `workstationBlocks` - Exact block ID matches
-- `usePatterns` / `containerPatterns` / `workstationPatterns` - Partial matches (if ID contains pattern)
+**Tip:** Use `/easyclaims set` to change settings in-game without editing files!
+
+### block_groups.json - Block Permissions
+
+Controls which blocks need which trust level. Uses pattern matching:
+
+```json
+{
+  "usePatterns": ["door", "button", "lever", "gate", "trapdoor"],
+  "containerPatterns": ["chest", "barrel", "storage", "hopper"],
+  "workstationPatterns": ["crafting", "furnace", "anvil", "brewing"]
+}
+```
+
+Add Hytale block IDs as you discover them!
+
+---
 
 ## Data Storage
 
-All data is stored in `mods/Community_LandClaims/`:
+All plugin data is stored in `mods/Community_EasyClaims/`:
 
 ```
-mods/Community_LandClaims/
-├── config.json           # Main configuration
-├── block_groups.json     # Block permission groups
-├── playtime/
-│   └── <uuid>.json       # Per-player playtime data
-└── claims/
-    ├── index.json        # Chunk ownership index
-    └── <uuid>.json       # Per-player claims and trusted players
+mods/Community_EasyClaims/
+├── config.json          # Main settings
+├── block_groups.json    # Block permission rules
+├── claims/
+│   ├── index.json       # Quick lookup of all claims
+│   └── <uuid>.json      # Each player's claims & trusted players
+└── playtime/
+    └── <uuid>.json      # Each player's playtime
 ```
 
-### Claim Data Format
+---
 
-Each player's claims file (`claims/<uuid>.json`):
+## Troubleshooting
 
-```json
-{
-  "claims": [
-    {
-      "world": "default",
-      "chunkX": 10,
-      "chunkZ": -5,
-      "claimedAt": 1704067200000
-    }
-  ],
-  "trustedPlayersData": {
-    "uuid-of-trusted-player": {
-      "name": "PlayerName",
-      "level": "container"
-    }
-  }
-}
-```
+### "You don't have permission"
+Ask your server admin to grant you the `easyclaims.*` permissions.
 
-## Permissions Setup
+### Claims not showing on map?
+Try closing and reopening your map, or reconnect to the server.
 
-Grant permissions to your server's permission groups:
+### Can't claim?
+- Check if you have available slots: `/playtime`
+- Make sure the chunk isn't already claimed by someone else
 
-```
-perm group add Adventure landclaims.claim
-perm group add Adventure landclaims.unclaim
-perm group add Adventure landclaims.unclaimall
-perm group add Adventure landclaims.list
-perm group add Adventure landclaims.trust
-perm group add Adventure landclaims.untrust
-perm group add Adventure landclaims.trustlist
-perm group add Adventure landclaims.playtime
-perm group add Adventure landclaims.help
-```
+### Protection not working?
+Check server console for `[EasyClaims]` messages to debug block events.
 
-## How Protection Works
-
-The plugin uses Hytale's ECS event system to intercept block interactions:
-
-| Event | Required Trust Level |
-|-------|---------------------|
-| `UseBlockEvent.Pre` | Depends on block type (use/container/workstation) |
-| `DamageBlockEvent` | `damage` |
-| `BreakBlockEvent` | `build` |
-| `PlaceBlockEvent` | `build` |
-
-When a player tries to interact with a claimed chunk:
-1. If unclaimed or player is owner: Allowed
-2. If player has required trust level: Allowed
-3. Otherwise: Cancelled with message
+---
 
 ## Building from Source
 
-Requires Java 25 and Maven.
+Requires Java 25+ and Maven:
 
 ```bash
-cd plugins/LandClaims
 mvn clean package
 ```
 
-The built JAR will be in `target/LandClaims-1.0.0.jar`. Copy to your server's `mods/` folder.
+Output: `target/EasyClaims-1.0.0.jar`
 
-## Debugging
-
-Enable debug logging to see block events:
-- Check server console for `[LandClaims]` messages
-- Block IDs are logged when interactions are checked
-- Use this to discover block IDs for your `block_groups.json`
-
-## Migration
-
-The plugin automatically migrates old data formats:
-- **v1** (List of UUIDs) → Converted to BUILD trust level
-- **v2** (UUID → name map) → Converted to BUILD trust level
-- **v3** (Current format with trust levels) → Used as-is
+---
 
 ## License
 
-MIT
+MIT - Use it however you like!
