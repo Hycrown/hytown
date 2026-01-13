@@ -4,13 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.landclaims</groupId>
-    <artifactId>LandClaims</artifactId>
+    <groupId>com.easyclaims</groupId>
+    <artifactId>EasyClaims</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>LandClaims</name>
-    <description>Chunk-based land claiming plugin with playtime-based claim limits</description>
+    <name>EasyClaims</name>
+    <description>Easy chunk-based land claiming for Hytale servers</description>
 
     <properties>
         <maven.compiler.source>25</maven.compiler.source>
@@ -72,7 +72,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.landclaims.LandClaims</mainClass>
+                            <mainClass>com.easyclaims.EasyClaims</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
