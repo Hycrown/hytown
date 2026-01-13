@@ -112,7 +112,7 @@ plugins/PluginName/
 ### manifest.json (PascalCase Required!)
 ```json
 {
-    "Group": "Community",
+    "Group": "cryptobench",
     "Name": "EasyClaims",
     "Version": "1.0.0",
     "Main": "com.easyclaims.EasyClaims",
