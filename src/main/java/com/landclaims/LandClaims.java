@@ -3,9 +3,7 @@ package com.landclaims;
 import com.landclaims.commands.ClaimCommand;
 import com.landclaims.commands.ClaimHelpCommand;
 import com.landclaims.commands.ClaimsCommand;
-import com.landclaims.commands.HideClaimsCommand;
 import com.landclaims.commands.PlaytimeCommand;
-import com.landclaims.commands.ShowClaimsCommand;
 import com.landclaims.commands.TrustCommand;
 import com.landclaims.commands.TrustListCommand;
 import com.landclaims.commands.UnclaimCommand;
@@ -91,8 +89,6 @@ public class LandClaims extends JavaPlugin {
         getCommandRegistry().registerCommand(new UnclaimCommand(this));
         getCommandRegistry().registerCommand(new UnclaimAllCommand(this));
         getCommandRegistry().registerCommand(new ClaimsCommand(this));
-        getCommandRegistry().registerCommand(new ShowClaimsCommand(this));
-        getCommandRegistry().registerCommand(new HideClaimsCommand(this));
         getCommandRegistry().registerCommand(new TrustCommand(this));
         getCommandRegistry().registerCommand(new UntrustCommand(this));
         getCommandRegistry().registerCommand(new TrustListCommand(this));
