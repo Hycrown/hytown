@@ -333,26 +333,3 @@ import com.hypixel.hytale.math.vector.Vector3i;
 // Messages
 import com.hypixel.hytale.server.core.Message;
 ```
-
-## Current Protection Issue (Debugging)
-
-### Problem
-Block protection not working - untrusted players can still break/place/use blocks.
-
-### What We've Tried
-1. PlayerInteractEvent only - doesn't prevent block operations
-2. EventRegistry.registerGlobal for ECS events - silently fails (wrong type)
-3. EntityEventSystem implementations - compiles but may not be triggered
-
-### Debug Logs Added
-Check server console for:
-- `[EasyClaims] PlayerInteractEvent:` - player interactions
-- `[EasyClaims] BreakBlockEvent fired` - if ECS system is called
-- `[EasyClaims] CANCELLING` - if protection logic runs
-- `[EasyClaims] Registered *System` - if systems register successfully
-
-### Possible Issues to Investigate
-1. Are ECS systems being called at all? (Check logs)
-2. Is `Query.any()` correct for block events?
-3. Do block events need WorldEventType instead of EntityEventType?
-4. Is there a system priority/ordering issue?
