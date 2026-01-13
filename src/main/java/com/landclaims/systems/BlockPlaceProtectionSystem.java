@@ -37,19 +37,24 @@ public class BlockPlaceProtectionSystem extends EntityEventSystem<EntityStore, P
         Vector3i targetBlock = event.getTargetBlock();
         if (targetBlock == null) return;
 
+        System.out.println("[LandClaims] PlaceBlockEvent fired at " + targetBlock);
+
         // For placing, the target is where the new block goes (adjacent to looked-at block)
         PlayerInteraction interaction = ClaimProtectionListener.findNearbyInteraction(targetBlock);
 
         if (interaction != null) {
+            System.out.println("[LandClaims] PlaceBlock: Found nearby player " + interaction.playerId);
             if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
                     targetBlock.getX(), targetBlock.getZ())) {
+                System.out.println("[LandClaims] CANCELLING PlaceBlockEvent");
                 event.setCancelled(true);
             }
         } else {
-            // No player tracked - protect claimed chunks
             String worldName = "default";
             UUID owner = claimManager.getOwnerAt(worldName, targetBlock.getX(), targetBlock.getZ());
+            System.out.println("[LandClaims] PlaceBlock: No player tracked, owner=" + owner);
             if (owner != null) {
+                System.out.println("[LandClaims] CANCELLING PlaceBlockEvent (no player, claimed)");
                 event.setCancelled(true);
             }
         }

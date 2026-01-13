@@ -59,6 +59,11 @@ public class ClaimProtectionListener {
 
         UUID playerId = player.getUuid();
         String worldName = "default";
+        InteractionType actionType = event.getActionType();
+
+        // DEBUG: Log all interactions
+        System.out.println("[LandClaims] PlayerInteractEvent: player=" + playerId +
+            " block=" + targetBlock + " action=" + actionType);
 
         // Track this interaction for ECS event correlation
         String blockKey = getBlockKey(targetBlock);
@@ -70,7 +75,12 @@ public class ClaimProtectionListener {
         cleanupOldInteractions();
 
         // Check if this location is protected - cancel ALL interactions in protected areas
-        if (!claimManager.canInteract(playerId, worldName, targetBlock.getX(), targetBlock.getZ())) {
+        boolean canInteract = claimManager.canInteract(playerId, worldName, targetBlock.getX(), targetBlock.getZ());
+        System.out.println("[LandClaims] canInteract=" + canInteract + " for chunk " +
+            (int)Math.floor(targetBlock.getX()/16.0) + "," + (int)Math.floor(targetBlock.getZ()/16.0));
+
+        if (!canInteract) {
+            System.out.println("[LandClaims] CANCELLING PlayerInteractEvent");
             event.setCancelled(true);
         }
     }

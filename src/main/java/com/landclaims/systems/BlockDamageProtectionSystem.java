@@ -38,12 +38,18 @@ public class BlockDamageProtectionSystem extends EntityEventSystem<EntityStore, 
         Vector3i targetBlock = event.getTargetBlock();
         if (targetBlock == null) return;
 
+        // Only log occasionally to avoid spam (damage events fire frequently)
+        if (event.getCurrentDamage() < 0.1f) {
+            System.out.println("[LandClaims] DamageBlockEvent at " + targetBlock + " damage=" + event.getDamage());
+        }
+
         String blockKey = ClaimProtectionListener.getBlockKey(targetBlock);
         PlayerInteraction interaction = ClaimProtectionListener.getInteraction(blockKey);
 
         if (interaction != null) {
             if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
                     targetBlock.getX(), targetBlock.getZ())) {
+                System.out.println("[LandClaims] CANCELLING DamageBlockEvent (tracked player)");
                 event.setCancelled(true);
             }
         } else {
@@ -51,13 +57,14 @@ public class BlockDamageProtectionSystem extends EntityEventSystem<EntityStore, 
             if (interaction != null) {
                 if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
                         targetBlock.getX(), targetBlock.getZ())) {
+                    System.out.println("[LandClaims] CANCELLING DamageBlockEvent (nearby player)");
                     event.setCancelled(true);
                 }
             } else {
-                // No player tracked - protect claimed chunks
                 String worldName = "default";
                 UUID owner = claimManager.getOwnerAt(worldName, targetBlock.getX(), targetBlock.getZ());
                 if (owner != null) {
+                    System.out.println("[LandClaims] CANCELLING DamageBlockEvent (no player, claimed)");
                     event.setCancelled(true);
                 }
             }
