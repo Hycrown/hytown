@@ -2,14 +2,14 @@ package com.landclaims.systems;
 
 import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.math.vector.Vector3i;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.PlaceBlockEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import com.landclaims.listeners.ClaimProtectionListener;
-import com.landclaims.listeners.ClaimProtectionListener.PlayerInteraction;
 import com.landclaims.managers.ClaimManager;
 
 import java.util.UUID;
@@ -39,24 +39,28 @@ public class BlockPlaceProtectionSystem extends EntityEventSystem<EntityStore, P
 
         System.out.println("[LandClaims] PlaceBlockEvent fired at " + targetBlock);
 
-        // For placing, the target is where the new block goes (adjacent to looked-at block)
-        PlayerInteraction interaction = ClaimProtectionListener.findNearbyInteraction(targetBlock);
+        // Get the entity that triggered this event
+        Ref<EntityStore> entityRef = chunk.getReferenceTo(entityIndex);
+        if (entityRef == null) {
+            System.out.println("[LandClaims] PlaceBlock: No entity ref");
+            return;
+        }
 
-        if (interaction != null) {
-            System.out.println("[LandClaims] PlaceBlock: Found nearby player " + interaction.playerId);
-            if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
-                    targetBlock.getX(), targetBlock.getZ())) {
-                System.out.println("[LandClaims] CANCELLING PlaceBlockEvent");
-                event.setCancelled(true);
-            }
-        } else {
-            String worldName = "default";
-            UUID owner = claimManager.getOwnerAt(worldName, targetBlock.getX(), targetBlock.getZ());
-            System.out.println("[LandClaims] PlaceBlock: No player tracked, owner=" + owner);
-            if (owner != null) {
-                System.out.println("[LandClaims] CANCELLING PlaceBlockEvent (no player, claimed)");
-                event.setCancelled(true);
-            }
+        // Get the Player component from the entity
+        Player player = store.getComponent(entityRef, Player.getComponentType());
+        if (player == null) {
+            System.out.println("[LandClaims] PlaceBlock: Entity is not a player");
+            return;
+        }
+
+        UUID playerId = player.getUuid();
+        String worldName = "default"; // TODO: Get actual world name
+
+        System.out.println("[LandClaims] PlaceBlock: Player " + playerId + " at " + targetBlock);
+
+        if (!claimManager.canInteract(playerId, worldName, targetBlock.getX(), targetBlock.getZ())) {
+            System.out.println("[LandClaims] CANCELLING PlaceBlockEvent for player " + playerId);
+            event.setCancelled(true);
         }
     }
 }

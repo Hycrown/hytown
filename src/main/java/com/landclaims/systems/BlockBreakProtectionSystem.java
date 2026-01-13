@@ -2,14 +2,14 @@ package com.landclaims.systems;
 
 import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.math.vector.Vector3i;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import com.landclaims.listeners.ClaimProtectionListener;
-import com.landclaims.listeners.ClaimProtectionListener.PlayerInteraction;
 import com.landclaims.managers.ClaimManager;
 
 import java.util.UUID;
@@ -39,35 +39,28 @@ public class BlockBreakProtectionSystem extends EntityEventSystem<EntityStore, B
 
         System.out.println("[LandClaims] BreakBlockEvent fired at " + targetBlock);
 
-        String blockKey = ClaimProtectionListener.getBlockKey(targetBlock);
-        PlayerInteraction interaction = ClaimProtectionListener.getInteraction(blockKey);
+        // Get the entity that triggered this event
+        Ref<EntityStore> entityRef = chunk.getReferenceTo(entityIndex);
+        if (entityRef == null) {
+            System.out.println("[LandClaims] BreakBlock: No entity ref");
+            return;
+        }
 
-        if (interaction != null) {
-            System.out.println("[LandClaims] BreakBlock: Found tracked player " + interaction.playerId);
-            if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
-                    targetBlock.getX(), targetBlock.getZ())) {
-                System.out.println("[LandClaims] CANCELLING BreakBlockEvent (tracked player)");
-                event.setCancelled(true);
-            }
-            ClaimProtectionListener.removeInteraction(blockKey);
-        } else {
-            interaction = ClaimProtectionListener.findNearbyInteraction(targetBlock);
-            if (interaction != null) {
-                System.out.println("[LandClaims] BreakBlock: Found nearby player " + interaction.playerId);
-                if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
-                        targetBlock.getX(), targetBlock.getZ())) {
-                    System.out.println("[LandClaims] CANCELLING BreakBlockEvent (nearby player)");
-                    event.setCancelled(true);
-                }
-            } else {
-                String worldName = "default";
-                UUID owner = claimManager.getOwnerAt(worldName, targetBlock.getX(), targetBlock.getZ());
-                System.out.println("[LandClaims] BreakBlock: No player tracked, owner=" + owner);
-                if (owner != null) {
-                    System.out.println("[LandClaims] CANCELLING BreakBlockEvent (no player, claimed chunk)");
-                    event.setCancelled(true);
-                }
-            }
+        // Get the Player component from the entity
+        Player player = store.getComponent(entityRef, Player.getComponentType());
+        if (player == null) {
+            System.out.println("[LandClaims] BreakBlock: Entity is not a player");
+            return;
+        }
+
+        UUID playerId = player.getUuid();
+        String worldName = "default"; // TODO: Get actual world name
+
+        System.out.println("[LandClaims] BreakBlock: Player " + playerId + " at " + targetBlock);
+
+        if (!claimManager.canInteract(playerId, worldName, targetBlock.getX(), targetBlock.getZ())) {
+            System.out.println("[LandClaims] CANCELLING BreakBlockEvent for player " + playerId);
+            event.setCancelled(true);
         }
     }
 }

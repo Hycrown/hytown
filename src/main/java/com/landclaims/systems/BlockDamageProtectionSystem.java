@@ -2,14 +2,14 @@ package com.landclaims.systems;
 
 import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.math.vector.Vector3i;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.DamageBlockEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import com.landclaims.listeners.ClaimProtectionListener;
-import com.landclaims.listeners.ClaimProtectionListener.PlayerInteraction;
 import com.landclaims.managers.ClaimManager;
 
 import java.util.UUID;
@@ -38,36 +38,27 @@ public class BlockDamageProtectionSystem extends EntityEventSystem<EntityStore, 
         Vector3i targetBlock = event.getTargetBlock();
         if (targetBlock == null) return;
 
-        // Only log occasionally to avoid spam (damage events fire frequently)
-        if (event.getCurrentDamage() < 0.1f) {
-            System.out.println("[LandClaims] DamageBlockEvent at " + targetBlock + " damage=" + event.getDamage());
+        // Get the entity that triggered this event
+        Ref<EntityStore> entityRef = chunk.getReferenceTo(entityIndex);
+        if (entityRef == null) {
+            return;
         }
 
-        String blockKey = ClaimProtectionListener.getBlockKey(targetBlock);
-        PlayerInteraction interaction = ClaimProtectionListener.getInteraction(blockKey);
+        // Get the Player component from the entity
+        Player player = store.getComponent(entityRef, Player.getComponentType());
+        if (player == null) {
+            return;
+        }
 
-        if (interaction != null) {
-            if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
-                    targetBlock.getX(), targetBlock.getZ())) {
-                System.out.println("[LandClaims] CANCELLING DamageBlockEvent (tracked player)");
-                event.setCancelled(true);
+        UUID playerId = player.getUuid();
+        String worldName = "default"; // TODO: Get actual world name
+
+        if (!claimManager.canInteract(playerId, worldName, targetBlock.getX(), targetBlock.getZ())) {
+            // Only log on first damage attempt to reduce spam
+            if (event.getCurrentDamage() < 0.1f) {
+                System.out.println("[LandClaims] CANCELLING DamageBlockEvent for player " + playerId + " at " + targetBlock);
             }
-        } else {
-            interaction = ClaimProtectionListener.findNearbyInteraction(targetBlock);
-            if (interaction != null) {
-                if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
-                        targetBlock.getX(), targetBlock.getZ())) {
-                    System.out.println("[LandClaims] CANCELLING DamageBlockEvent (nearby player)");
-                    event.setCancelled(true);
-                }
-            } else {
-                String worldName = "default";
-                UUID owner = claimManager.getOwnerAt(worldName, targetBlock.getX(), targetBlock.getZ());
-                if (owner != null) {
-                    System.out.println("[LandClaims] CANCELLING DamageBlockEvent (no player, claimed)");
-                    event.setCancelled(true);
-                }
-            }
+            event.setCancelled(true);
         }
     }
 }
