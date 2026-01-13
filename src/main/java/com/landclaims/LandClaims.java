@@ -48,6 +48,11 @@ public class LandClaims extends JavaPlugin {
 
     @Override
     public void setup() {
+        // Test logging - if you don't see this, logging isn't working
+        getLogger().atSevere().log("========== LANDCLAIMS PLUGIN STARTING ==========");
+        getLogger().atWarning().log("LandClaims setup() called - testing logging");
+        getLogger().atInfo().log("LandClaims INFO level test");
+
         // Initialize configuration
         config = new PluginConfig(getDataDirectory());
 
@@ -99,7 +104,7 @@ public class LandClaims extends JavaPlugin {
 
     @Override
     public void start() {
-        // Plugin started successfully
+        getLogger().atSevere().log("========== LANDCLAIMS PLUGIN STARTED ==========");
     }
 
     @Override
