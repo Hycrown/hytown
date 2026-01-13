@@ -88,12 +88,19 @@ jobs:
           | `/easyclaims claim` | Claim the chunk you're standing in |
           | `/easyclaims unclaim` | Unclaim current chunk |
           | `/easyclaims list` | List all your claims |
-          | `/easyclaims trust <player> [level]` | Trust a player |
+          | `/easyclaims trust <player> [level]` | Trust a player (levels: use, container, workstation, build) |
           | `/easyclaims untrust <player>` | Remove trust |
           | `/easyclaims trustlist` | List trusted players |
-          | `/easyclaims playtime` | Show your stats |
-          | `/easyclaims admin config` | Show settings (admin) |
-          | `/easyclaims admin set <key> <value>` | Change settings (admin) |
+          | `/easyclaims playtime` | Show your playtime and claim slots |
+
+          ### Admin Commands
+          | Command | Description |
+          |---------|-------------|
+          | `/easyclaims admin config` | Show current server settings |
+          | `/easyclaims admin set starting <n>` | Set starting claims for new players |
+          | `/easyclaims admin set perhour <n>` | Set claims earned per hour played |
+          | `/easyclaims admin set max <n>` | Set maximum claims allowed |
+          | `/easyclaims admin reload` | Reload config from file |
 
           ### Permissions
           ```
