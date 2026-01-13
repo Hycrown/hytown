@@ -1,15 +1,6 @@
 package com.easyclaims;
 
-import com.easyclaims.commands.ClaimCommand;
-import com.easyclaims.commands.ClaimHelpCommand;
-import com.easyclaims.commands.ClaimsCommand;
 import com.easyclaims.commands.EasyClaimsCommand;
-import com.easyclaims.commands.PlaytimeCommand;
-import com.easyclaims.commands.TrustCommand;
-import com.easyclaims.commands.TrustListCommand;
-import com.easyclaims.commands.UnclaimCommand;
-import com.easyclaims.commands.UnclaimAllCommand;
-import com.easyclaims.commands.UntrustCommand;
 import com.easyclaims.config.BlockGroups;
 import com.easyclaims.config.PluginConfig;
 import com.easyclaims.data.ClaimStorage;
@@ -85,16 +76,7 @@ public class EasyClaims extends JavaPlugin {
         claimManager = new ClaimManager(claimStorage, playtimeStorage, config, blockGroups);
         playtimeManager = new PlaytimeManager(playtimeStorage, config);
 
-        // Register commands
-        getCommandRegistry().registerCommand(new ClaimCommand(this));
-        getCommandRegistry().registerCommand(new UnclaimCommand(this));
-        getCommandRegistry().registerCommand(new UnclaimAllCommand(this));
-        getCommandRegistry().registerCommand(new ClaimsCommand(this));
-        getCommandRegistry().registerCommand(new TrustCommand(this));
-        getCommandRegistry().registerCommand(new UntrustCommand(this));
-        getCommandRegistry().registerCommand(new TrustListCommand(this));
-        getCommandRegistry().registerCommand(new PlaytimeCommand(this));
-        getCommandRegistry().registerCommand(new ClaimHelpCommand(this));
+        // Register the main command (all functionality under /easyclaims)
         getCommandRegistry().registerCommand(new EasyClaimsCommand(this));
 
         // Register protection event listeners (for PlayerInteractEvent)

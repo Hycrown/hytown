@@ -6,7 +6,7 @@ Protect your builds on Hytale servers! Claim land, see it on your map, and share
 
 1. **Install**: Drop `EasyClaims-1.0.0.jar` into your server's `mods/` folder
 2. **Restart** your server
-3. **Claim land**: Stand where you want to protect and type `/claim`
+3. **Claim land**: Stand where you want to protect and type `/easyclaims claim`
 4. **See your claims**: Open your map (M) - claimed chunks show in color!
 
 That's it! Your builds are now protected.
@@ -24,31 +24,33 @@ That's it! Your builds are now protected.
 
 ## Commands
 
+All commands use `/easyclaims` (or `/ec` for short).
+
 ### Essential Commands
 
 | Command | What it does |
 |---------|--------------|
-| `/claim` | Claim the chunk you're standing in |
-| `/unclaim` | Remove your claim on current chunk |
-| `/claims` | List all your claimed chunks |
-| `/claimhelp` | Show all available commands |
+| `/easyclaims claim` | Claim the chunk you're standing in |
+| `/easyclaims unclaim` | Remove your claim on current chunk |
+| `/easyclaims list` | List all your claimed chunks |
+| `/easyclaims help` | Show all available commands |
 
 ### Sharing With Friends
 
 | Command | What it does |
 |---------|--------------|
-| `/trust PlayerName` | Give full access to a player |
-| `/trust PlayerName use` | Let them use doors/buttons only |
-| `/trust PlayerName container` | Let them open chests too |
-| `/untrust PlayerName` | Remove a player's access |
-| `/trustlist` | See who you've trusted |
+| `/easyclaims trust PlayerName` | Give full access to a player |
+| `/easyclaims trust PlayerName use` | Let them use doors/buttons only |
+| `/easyclaims trust PlayerName container` | Let them open chests too |
+| `/easyclaims untrust PlayerName` | Remove a player's access |
+| `/easyclaims trustlist` | See who you've trusted |
 
 ### Other Commands
 
 | Command | What it does |
 |---------|--------------|
-| `/unclaimall` | Remove ALL your claims (careful!) |
-| `/playtime` | Check your playtime and claim slots |
+| `/easyclaims unclaimall` | Remove ALL your claims (careful!) |
+| `/easyclaims playtime` | Check your playtime and claim slots |
 
 ### Admin Commands
 
@@ -69,18 +71,18 @@ That's it! Your builds are now protected.
 
 ## Trust Levels Explained
 
-When you `/trust` someone, you can choose how much access they get:
+When you trust someone, you can choose how much access they get:
 
 | Level | Command Example | What They Can Do |
 |-------|-----------------|------------------|
-| **use** | `/trust Steve use` | Open doors, press buttons, flip levers |
-| **container** | `/trust Steve container` | Above + open chests, barrels |
-| **workstation** | `/trust Steve workstation` | Above + use furnaces, crafting tables |
-| **build** | `/trust Steve build` | Full access - can break and place blocks |
+| **use** | `/easyclaims trust Steve use` | Open doors, press buttons, flip levers |
+| **container** | `/easyclaims trust Steve container` | Above + open chests, barrels |
+| **workstation** | `/easyclaims trust Steve workstation` | Above + use furnaces, crafting tables |
+| **build** | `/easyclaims trust Steve build` | Full access - can break and place blocks |
 
 **Note:** If you don't specify a level, players get full `build` access.
 
-**Tip:** Use `/trust PlayerName use` for visitors who just need to get through doors!
+**Tip:** Use `/easyclaims trust PlayerName use` for visitors who just need to get through doors!
 
 ---
 
@@ -103,7 +105,7 @@ The longer you play, the more land you can claim:
 | 5 hours | 14 chunks |
 | 10 hours | 24 chunks |
 
-Use `/playtime` to check your progress!
+Use `/easyclaims playtime` to check your progress!
 
 ---
 
@@ -121,17 +123,12 @@ Use `/playtime` to check your progress!
 Grant these permissions to let players use the plugin:
 
 ```
-perm group add Adventure easyclaims.claim
-perm group add Adventure easyclaims.unclaim
-perm group add Adventure easyclaims.unclaimall
-perm group add Adventure easyclaims.list
-perm group add Adventure easyclaims.trust
-perm group add Adventure easyclaims.untrust
-perm group add Adventure easyclaims.trustlist
-perm group add Adventure easyclaims.playtime
-perm group add Adventure easyclaims.help
+perm group add Adventure easyclaims.use
 perm group add admin easyclaims.admin
 ```
+
+The `easyclaims.use` permission grants access to all player commands (claim, unclaim, trust, etc.).
+The `easyclaims.admin` permission grants access to config/set/reload commands.
 
 ---
 
@@ -196,13 +193,13 @@ mods/Community_EasyClaims/
 ## Troubleshooting
 
 ### "You don't have permission"
-Ask your server admin to grant you the `easyclaims.*` permissions.
+Ask your server admin to grant you the `easyclaims.use` permission.
 
 ### Claims not showing on map?
 Try closing and reopening your map, or reconnect to the server.
 
 ### Can't claim?
-- Check if you have available slots: `/playtime`
+- Check if you have available slots: `/easyclaims playtime`
 - Make sure the chunk isn't already claimed by someone else
 
 ### Protection not working?
