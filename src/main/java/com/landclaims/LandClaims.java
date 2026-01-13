@@ -19,10 +19,6 @@ import com.landclaims.systems.BlockPlaceProtectionSystem;
 import com.landclaims.systems.BlockUseProtectionSystem;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
-import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
-import com.hypixel.hytale.server.core.event.events.ecs.DamageBlockEvent;
-import com.hypixel.hytale.server.core.event.events.ecs.PlaceBlockEvent;
-import com.hypixel.hytale.server.core.event.events.ecs.UseBlockEvent;
 
 /**
  * LandClaims - A chunk-based land claiming plugin with playtime-based limits.
@@ -80,14 +76,7 @@ public class LandClaims extends JavaPlugin {
         // Register ECS block protection systems
         getLogger().atInfo().log("Registering ECS block protection systems...");
         try {
-            // Register entity event types first - required before systems can receive these events
-            getEntityStoreRegistry().registerEntityEventType(DamageBlockEvent.class);
-            getEntityStoreRegistry().registerEntityEventType(BreakBlockEvent.class);
-            getEntityStoreRegistry().registerEntityEventType(PlaceBlockEvent.class);
-            getEntityStoreRegistry().registerEntityEventType(UseBlockEvent.Pre.class);
-            getLogger().atInfo().log("Registered entity event types");
-
-            // Now register the systems that handle these events
+            // Event types are already registered by the core game, just register our systems
             getEntityStoreRegistry().registerSystem(new BlockDamageProtectionSystem(claimManager, getLogger()));
             getLogger().atInfo().log("Registered BlockDamageProtectionSystem");
             getEntityStoreRegistry().registerSystem(new BlockBreakProtectionSystem(claimManager, getLogger()));
