@@ -69,10 +69,21 @@ public class LandClaims extends JavaPlugin {
         protectionListener.register(getEventRegistry());
 
         // Register ECS block protection systems
-        getEntityStoreRegistry().registerSystem(new BlockDamageProtectionSystem(claimManager));
-        getEntityStoreRegistry().registerSystem(new BlockBreakProtectionSystem(claimManager));
-        getEntityStoreRegistry().registerSystem(new BlockPlaceProtectionSystem(claimManager));
-        getEntityStoreRegistry().registerSystem(new BlockUseProtectionSystem(claimManager));
+        System.out.println("[LandClaims] Registering ECS block protection systems...");
+        try {
+            getEntityStoreRegistry().registerSystem(new BlockDamageProtectionSystem(claimManager));
+            System.out.println("[LandClaims] Registered BlockDamageProtectionSystem");
+            getEntityStoreRegistry().registerSystem(new BlockBreakProtectionSystem(claimManager));
+            System.out.println("[LandClaims] Registered BlockBreakProtectionSystem");
+            getEntityStoreRegistry().registerSystem(new BlockPlaceProtectionSystem(claimManager));
+            System.out.println("[LandClaims] Registered BlockPlaceProtectionSystem");
+            getEntityStoreRegistry().registerSystem(new BlockUseProtectionSystem(claimManager));
+            System.out.println("[LandClaims] Registered BlockUseProtectionSystem");
+            System.out.println("[LandClaims] All ECS systems registered successfully!");
+        } catch (Exception e) {
+            System.out.println("[LandClaims] ERROR registering ECS systems: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     @Override

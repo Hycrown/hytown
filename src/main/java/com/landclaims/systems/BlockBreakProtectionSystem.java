@@ -37,29 +37,34 @@ public class BlockBreakProtectionSystem extends EntityEventSystem<EntityStore, B
         Vector3i targetBlock = event.getTargetBlock();
         if (targetBlock == null) return;
 
+        System.out.println("[LandClaims] BreakBlockEvent fired at " + targetBlock);
+
         String blockKey = ClaimProtectionListener.getBlockKey(targetBlock);
         PlayerInteraction interaction = ClaimProtectionListener.getInteraction(blockKey);
 
         if (interaction != null) {
-            // We know which player is breaking this block
+            System.out.println("[LandClaims] BreakBlock: Found tracked player " + interaction.playerId);
             if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
                     targetBlock.getX(), targetBlock.getZ())) {
+                System.out.println("[LandClaims] CANCELLING BreakBlockEvent (tracked player)");
                 event.setCancelled(true);
             }
             ClaimProtectionListener.removeInteraction(blockKey);
         } else {
-            // Try nearby interaction
             interaction = ClaimProtectionListener.findNearbyInteraction(targetBlock);
             if (interaction != null) {
+                System.out.println("[LandClaims] BreakBlock: Found nearby player " + interaction.playerId);
                 if (!claimManager.canInteract(interaction.playerId, interaction.worldName,
                         targetBlock.getX(), targetBlock.getZ())) {
+                    System.out.println("[LandClaims] CANCELLING BreakBlockEvent (nearby player)");
                     event.setCancelled(true);
                 }
             } else {
-                // No player tracked - protect claimed chunks
                 String worldName = "default";
                 UUID owner = claimManager.getOwnerAt(worldName, targetBlock.getX(), targetBlock.getZ());
+                System.out.println("[LandClaims] BreakBlock: No player tracked, owner=" + owner);
                 if (owner != null) {
+                    System.out.println("[LandClaims] CANCELLING BreakBlockEvent (no player, claimed chunk)");
                     event.setCancelled(true);
                 }
             }
