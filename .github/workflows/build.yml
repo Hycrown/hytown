@@ -1,0 +1,114 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Java 25
+      uses: actions/setup-java@v4
+      with:
+        java-version: '25-ea'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Build with Maven
+      run: mvn clean package
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: LandClaims
+        path: target/LandClaims-*.jar
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: LandClaims
+        path: ./dist
+
+    - name: Get short SHA
+      id: sha
+      run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+    - name: Get current date
+      id: date
+      run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+    - name: Rename JAR
+      run: mv dist/LandClaims-*.jar dist/LandClaims.jar
+
+    - name: Delete existing latest release
+      run: gh release delete latest --yes || true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: Latest Build (${{ steps.date.outputs.DATE }})
+        body: |
+          ## LandClaims - Latest Build
+
+          **Commit:** ${{ github.sha }}
+          **Date:** ${{ steps.date.outputs.DATE }}
+
+          ### Installation
+          1. Download `LandClaims.jar`
+          2. Place in your Hytale server's `mods/` folder
+          3. Restart the server
+
+          ### Features
+          - Chunk-based land claiming
+          - Playtime-based claim limits (more playtime = more claims)
+          - Trust system for sharing claims
+          - Full protection for claimed areas
+
+          ### Default Config
+          - Starting chunks: 4
+          - Chunks per hour: 2
+          - Max claims: 50
+
+          ### Commands
+          | Command | Description |
+          |---------|-------------|
+          | `/claim` | Claim the chunk you're standing in |
+          | `/unclaim` | Unclaim the chunk you're standing in |
+          | `/claims` | List all your claims |
+          | `/trust <uuid>` | Trust a player in all your claims |
+          | `/untrust <uuid>` | Remove trust from a player |
+          | `/playtime` | Show your playtime and available claims |
+          | `/claimhelp` | Show help |
+
+          ### Setup Permissions
+          ```
+          perm group add Adventure landclaims.claim
+          perm group add Adventure landclaims.unclaim
+          perm group add Adventure landclaims.list
+          perm group add Adventure landclaims.trust
+          perm group add Adventure landclaims.untrust
+          perm group add Adventure landclaims.playtime
+          perm group add Adventure landclaims.help
+          ```
+        files: dist/LandClaims.jar
+        prerelease: false
+        make_latest: true
