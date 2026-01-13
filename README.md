@@ -116,7 +116,6 @@ Use `/easyclaims playtime` to check your progress!
 1. Download the latest JAR from [Releases](../../releases/latest)
 2. Place it in your server's `mods/` folder
 3. Restart the server
-4. Config files appear in `mods/Community_EasyClaims/`
 
 ### Setting Up Permissions
 
@@ -132,64 +131,6 @@ The `easyclaims.admin` permission grants access to `/easyclaims admin` commands 
 
 ---
 
-## Configuration
-
-Config files are in `mods/Community_EasyClaims/`.
-
-### config.json - Main Settings
-
-```json
-{
-  "startingClaims": 4,
-  "claimsPerHour": 2,
-  "maxClaims": 50,
-  "playtimeSaveInterval": 60
-}
-```
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `startingClaims` | 4 | Claims available to new players |
-| `claimsPerHour` | 2 | Extra claims earned per hour played |
-| `maxClaims` | 50 | Maximum claims anyone can have |
-
-**Formula:** `startingClaims + (hoursPlayed × claimsPerHour)`, max `maxClaims`
-
-**Tip:** Use `/easyclaims admin set` to change settings in-game without editing files!
-
-### block_groups.json - Block Permissions
-
-Controls which blocks need which trust level. Uses pattern matching:
-
-```json
-{
-  "usePatterns": ["door", "button", "lever", "gate", "trapdoor"],
-  "containerPatterns": ["chest", "barrel", "storage", "hopper"],
-  "workstationPatterns": ["crafting", "furnace", "anvil", "brewing"]
-}
-```
-
-Add Hytale block IDs as you discover them!
-
----
-
-## Data Storage
-
-All plugin data is stored in `mods/Community_EasyClaims/`:
-
-```
-mods/Community_EasyClaims/
-├── config.json          # Main settings
-├── block_groups.json    # Block permission rules
-├── claims/
-│   ├── index.json       # Quick lookup of all claims
-│   └── <uuid>.json      # Each player's claims & trusted players
-└── playtime/
-    └── <uuid>.json      # Each player's playtime
-```
-
----
-
 ## Troubleshooting
 
 ### "You don't have permission"
@@ -201,21 +142,6 @@ Try closing and reopening your map, or reconnect to the server.
 ### Can't claim?
 - Check if you have available slots: `/easyclaims playtime`
 - Make sure the chunk isn't already claimed by someone else
-
-### Protection not working?
-Check server console for `[EasyClaims]` messages to debug block events.
-
----
-
-## Building from Source
-
-Requires Java 25+ and Maven:
-
-```bash
-mvn clean package
-```
-
-Output: `target/EasyClaims-*.jar`
 
 ---
 
