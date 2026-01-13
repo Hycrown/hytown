@@ -1,0 +1,11 @@
+{
+    "Group": "Community",
+    "Name": "LandClaims",
+    "Version": "1.0.0",
+    "Main": "com.landclaims.LandClaims",
+    "Description": "Chunk-based land claiming with playtime-based limits, full protection, and trust system",
+    "Authors": [],
+    "Website": "",
+    "Dependencies": {},
+    "OptionalDependencies": {}
+}
