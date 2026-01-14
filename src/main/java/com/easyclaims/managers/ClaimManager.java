@@ -59,6 +59,16 @@ public class ClaimManager {
             return ClaimResult.CLAIMED_BY_OTHER;
         }
 
+        // Check buffer zone - is this chunk too close to another player's claim?
+        int bufferSize = config.getClaimBufferSize();
+        if (bufferSize > 0) {
+            UUID nearbyOwner = claimStorage.findNearbyClaimByOtherPlayer(
+                world, chunkX, chunkZ, bufferSize, playerId);
+            if (nearbyOwner != null) {
+                return ClaimResult.TOO_CLOSE_TO_OTHER_CLAIM;
+            }
+        }
+
         // Check claim limit
         PlayerClaims claims = claimStorage.getPlayerClaims(playerId);
         PlaytimeData playtime = playtimeStorage.getPlaytime(playerId);
@@ -242,6 +252,7 @@ public class ClaimManager {
         SUCCESS,
         ALREADY_OWN,
         CLAIMED_BY_OTHER,
-        LIMIT_REACHED
+        LIMIT_REACHED,
+        TOO_CLOSE_TO_OTHER_CLAIM
     }
 }

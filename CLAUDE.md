@@ -1,7 +1,7 @@
 # EasyClaims Plugin - Development Context
 
 ## Project Overview
-A chunk-based land claiming plugin for Hytale servers with playtime-based limits and trust system.
+A chunk-based land claiming plugin for Hytale servers with playtime-based limits, trust system, and anti-griefing buffer zones.
 
 ## How to Explore the Hytale Server API
 
@@ -336,7 +336,7 @@ Located at `Server/permissions.json`:
 | Permission | Description |
 |------------|-------------|
 | `easyclaims.use` | Basic access to /easyclaims command |
-| `easyclaims.admin` | Admin commands (config, set, reload) |
+| `easyclaims.admin` | Admin commands (config, set, reload, unclaim) |
 
 ## Messages (No Minecraft Color Codes!)
 ```java

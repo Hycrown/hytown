@@ -113,6 +113,10 @@ public class PluginConfig {
         return config.playtimeSaveInterval;
     }
 
+    public int getClaimBufferSize() {
+        return config.claimBufferSize;
+    }
+
     // ===== SETTERS (auto-save) =====
 
     public void setClaimsPerHour(int value) {
@@ -132,6 +136,11 @@ public class PluginConfig {
 
     public void setPlaytimeSaveInterval(int value) {
         config.playtimeSaveInterval = Math.max(10, value);
+        save();
+    }
+
+    public void setClaimBufferSize(int value) {
+        config.claimBufferSize = Math.max(0, value);  // 0 = disabled
         save();
     }
 
@@ -194,5 +203,6 @@ public class PluginConfig {
         int claimsPerHour = 2;
         int maxClaims = 50;
         int playtimeSaveInterval = 60;
+        int claimBufferSize = 2;  // Buffer zone in chunks around claims where others can't claim
     }
 }

@@ -127,7 +127,7 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
                 showHelp(playerData);
                 break;
             case "admin":
-                handleAdmin(playerData, args);
+                handleAdmin(playerData, args, store, playerRef, world);
                 break;
             default:
                 playerData.sendMessage(Message.raw("Unknown subcommand: " + subcommand).color(RED));
@@ -136,7 +136,7 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
     }
 
     // ===== ADMIN =====
-    private void handleAdmin(PlayerRef playerData, String[] args) {
+    private void handleAdmin(PlayerRef playerData, String[] args, Store<EntityStore> store, Ref<EntityStore> playerRef, World world) {
         if (!hasAdminPermission(playerData)) {
             return;
         }
@@ -161,6 +161,9 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
             case "reload":
                 handleReload(playerData);
                 break;
+            case "unclaim":
+                handleAdminUnclaim(playerData, arg1, store, playerRef, world);
+                break;
             default:
                 playerData.sendMessage(Message.raw("Unknown admin command: " + adminSubcmd).color(RED));
                 showAdminHelp(playerData);
@@ -172,8 +175,10 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("/easyclaims admin config - Show current settings").color(GRAY));
         playerData.sendMessage(Message.raw("/easyclaims admin set <key> <value> - Change a setting").color(GRAY));
         playerData.sendMessage(Message.raw("/easyclaims admin reload - Reload config from file").color(GRAY));
+        playerData.sendMessage(Message.raw("/easyclaims admin unclaim - Remove claim at your location").color(GRAY));
+        playerData.sendMessage(Message.raw("/easyclaims admin unclaim <player> - Remove all claims from player").color(GRAY));
         playerData.sendMessage(Message.raw("").color(GRAY));
-        playerData.sendMessage(Message.raw("Settings: starting, perhour, max").color(AQUA));
+        playerData.sendMessage(Message.raw("Settings: starting, perhour, max, buffer").color(AQUA));
     }
 
     // ===== CLAIM =====
@@ -210,6 +215,11 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
             case LIMIT_REACHED:
                 playerData.sendMessage(Message.raw("Claim limit reached! (" + currentClaims + "/" + maxClaims + ")").color(RED));
                 playerData.sendMessage(Message.raw("Play more to earn additional claims.").color(GRAY));
+                break;
+            case TOO_CLOSE_TO_OTHER_CLAIM:
+                playerData.sendMessage(Message.raw("Cannot claim here - too close to another player's claim!").color(RED));
+                int buffer = plugin.getPluginConfig().getClaimBufferSize();
+                playerData.sendMessage(Message.raw("Claims must be at least " + buffer + " chunks away from other players.").color(GRAY));
                 break;
         }
     }
@@ -430,11 +440,15 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("New players start with: " + config.getStartingClaims() + " claims").color(AQUA));
         playerData.sendMessage(Message.raw("Players earn: " + config.getClaimsPerHour() + " extra claims per hour played").color(AQUA));
         playerData.sendMessage(Message.raw("Maximum claims allowed: " + config.getMaxClaims()).color(AQUA));
+        int buffer = config.getClaimBufferSize();
+        String bufferText = buffer > 0 ? buffer + " chunks" : "disabled";
+        playerData.sendMessage(Message.raw("Claim buffer zone: " + bufferText).color(AQUA));
         playerData.sendMessage(Message.raw("").color(GRAY));
         playerData.sendMessage(Message.raw("To change these settings:").color(GRAY));
         playerData.sendMessage(Message.raw("  /easyclaims admin set starting <number>").color(YELLOW));
         playerData.sendMessage(Message.raw("  /easyclaims admin set perhour <number>").color(YELLOW));
         playerData.sendMessage(Message.raw("  /easyclaims admin set max <number>").color(YELLOW));
+        playerData.sendMessage(Message.raw("  /easyclaims admin set buffer <number>").color(YELLOW));
     }
 
     private void handleSet(PlayerRef playerData, String key, String valueStr) {
@@ -446,6 +460,8 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
             playerData.sendMessage(Message.raw("    Extra claims earned per hour played").color(GRAY));
             playerData.sendMessage(Message.raw("  /easyclaims admin set max <number>").color(YELLOW));
             playerData.sendMessage(Message.raw("    Maximum claims any player can have").color(GRAY));
+            playerData.sendMessage(Message.raw("  /easyclaims admin set buffer <number>").color(YELLOW));
+            playerData.sendMessage(Message.raw("    Buffer zone in chunks around claims (0 = disabled)").color(GRAY));
             return;
         }
 
@@ -474,8 +490,18 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
                 config.setMaxClaims(value);
                 playerData.sendMessage(Message.raw("Maximum claims is now " + value + "!").color(GREEN));
                 break;
+            case "buffer":
+            case "buffersize":
+            case "claimbuffer":
+                config.setClaimBufferSize(value);
+                if (value == 0) {
+                    playerData.sendMessage(Message.raw("Claim buffer zone disabled!").color(GREEN));
+                } else {
+                    playerData.sendMessage(Message.raw("Claim buffer zone set to " + value + " chunks!").color(GREEN));
+                }
+                break;
             default:
-                playerData.sendMessage(Message.raw("Unknown setting! Try: starting, perhour, or max").color(RED));
+                playerData.sendMessage(Message.raw("Unknown setting! Try: starting, perhour, max, or buffer").color(RED));
         }
     }
 
@@ -483,5 +509,59 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
         plugin.getPluginConfig().reload();
         playerData.sendMessage(Message.raw("Configuration reloaded!").color(GREEN));
         showConfig(playerData);
+    }
+
+    // ===== ADMIN: UNCLAIM =====
+    private void handleAdminUnclaim(PlayerRef playerData, String playerInput, Store<EntityStore> store, Ref<EntityStore> playerRef, World world) {
+        if (playerInput == null || playerInput.isEmpty()) {
+            // Unclaim chunk at current location
+            TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
+            Vector3d position = transform.getPosition();
+            String worldName = world.getName();
+
+            int chunkX = ChunkUtil.chunkCoordinate((int) position.getX());
+            int chunkZ = ChunkUtil.chunkCoordinate((int) position.getZ());
+
+            UUID owner = plugin.getClaimStorage().getClaimOwner(worldName, chunkX, chunkZ);
+            if (owner == null) {
+                playerData.sendMessage(Message.raw("This chunk is not claimed.").color(YELLOW));
+                return;
+            }
+
+            String ownerName = plugin.getClaimStorage().getPlayerName(owner);
+            plugin.getClaimStorage().removeClaim(owner, worldName, chunkX, chunkZ);
+            playerData.sendMessage(Message.raw("Removed claim [" + chunkX + ", " + chunkZ + "] from " + ownerName).color(GREEN));
+            plugin.refreshWorldMapChunk(worldName, chunkX, chunkZ);
+        } else {
+            // Unclaim all chunks from a specific player
+            UUID targetId = null;
+            String targetName = playerInput;
+
+            // Try online player first
+            PlayerRef targetPlayer = Universe.get().getPlayerByUsername(playerInput, NameMatching.EXACT_IGNORE_CASE);
+            if (targetPlayer != null) {
+                targetId = targetPlayer.getUuid();
+                targetName = targetPlayer.getUsername();
+            } else {
+                // Try UUID
+                try {
+                    targetId = UUID.fromString(playerInput);
+                    targetName = plugin.getClaimStorage().getPlayerName(targetId);
+                } catch (IllegalArgumentException e) {
+                    playerData.sendMessage(Message.raw("Player not found: " + playerInput).color(RED));
+                    return;
+                }
+            }
+
+            int count = plugin.getClaimManager().unclaimAll(targetId);
+            if (count > 0) {
+                playerData.sendMessage(Message.raw("Removed " + count + " claim(s) from " + targetName).color(GREEN));
+                for (String worldName : EasyClaims.WORLDS.keySet()) {
+                    plugin.refreshWorldMap(worldName);
+                }
+            } else {
+                playerData.sendMessage(Message.raw(targetName + " doesn't have any claims.").color(YELLOW));
+            }
+        }
     }
 }

@@ -19,6 +19,7 @@ That's it! Your builds are now protected.
 - **Playtime Rewards** - Play longer, claim more land
 - **Share With Friends** - Trust players with different permission levels
 - **Full Protection** - Blocks breaking, placing, and interactions from strangers
+- **Anti-Griefing Buffer** - 2-chunk buffer zone prevents others from claiming too close to you
 
 ---
 
@@ -59,12 +60,15 @@ All commands use `/easyclaims`.
 | `/easyclaims admin config` | Show current settings |
 | `/easyclaims admin set <key> <value>` | Change a setting (saves immediately) |
 | `/easyclaims admin reload` | Reload config from file |
+| `/easyclaims admin unclaim` | Remove claim at your location (any owner) |
+| `/easyclaims admin unclaim <player>` | Remove ALL claims from a player |
 
-**Example:**
+**Settings you can change:**
 ```
-/easyclaims admin set max 100
-/easyclaims admin set starting 6
-/easyclaims admin set perhour 3
+/easyclaims admin set starting 6      # Starting claim slots for new players
+/easyclaims admin set perhour 3       # Extra claims earned per hour
+/easyclaims admin set max 100         # Maximum claims any player can have
+/easyclaims admin set buffer 2        # Buffer zone in chunks (0 = disabled)
 ```
 
 ---
@@ -93,6 +97,7 @@ When you trust someone, you can choose how much access they get:
 - You start with **4 claim slots** and earn more by playing
 - Open your **world map (M)** to see claims highlighted in color
 - Your claims show in your unique color, others show in theirs
+- **Buffer zone**: Other players can't claim within 2 chunks of your claims (prevents griefing)
 
 ### Earning More Claims
 
@@ -142,6 +147,7 @@ Try closing and reopening your map, or reconnect to the server.
 ### Can't claim?
 - Check if you have available slots: `/easyclaims playtime`
 - Make sure the chunk isn't already claimed by someone else
+- You might be too close to another player's claim (2-chunk buffer zone)
 
 ---
 

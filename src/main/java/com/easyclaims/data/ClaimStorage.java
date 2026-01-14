@@ -355,6 +355,39 @@ public class ClaimStorage {
         return getClaimOwner(world, chunkX, chunkZ) != null;
     }
 
+    /**
+     * Finds claims by OTHER players within a radius of a target chunk.
+     * Returns the first found claim owner that isn't the excluded player, or null if none found.
+     *
+     * @param world The world name
+     * @param centerChunkX Center chunk X coordinate
+     * @param centerChunkZ Center chunk Z coordinate
+     * @param radius Radius in chunks to search (e.g., 2 = check 5x5 area)
+     * @param excludePlayerId Player whose claims should be ignored (the one trying to claim)
+     * @return UUID of first other player with a claim in range, or null if none
+     */
+    public UUID findNearbyClaimByOtherPlayer(String world, int centerChunkX, int centerChunkZ,
+                                              int radius, UUID excludePlayerId) {
+        Map<String, UUID> worldClaims = claimIndex.get(world);
+        if (worldClaims == null || radius <= 0) {
+            return null;
+        }
+
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                int checkX = centerChunkX + dx;
+                int checkZ = centerChunkZ + dz;
+                String key = ChunkUtil.chunkKey(checkX, checkZ);
+                UUID owner = worldClaims.get(key);
+
+                if (owner != null && !owner.equals(excludePlayerId)) {
+                    return owner;  // Found a claim by another player
+                }
+            }
+        }
+        return null;  // No other player claims in range
+    }
+
     public void saveAll() {
         for (UUID playerId : cache.keySet()) {
             savePlayerClaims(playerId);
