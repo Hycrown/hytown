@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * GUI for viewing and managing claim settings and trusted players.
@@ -34,16 +35,19 @@ public class ClaimSettingsGui extends InteractiveCustomUIPage<ClaimSettingsGui.S
 
     private final ClaimManager claimManager;
     private final PlaytimeManager playtimeManager;
+    private final Consumer<UUID> onTrustChanged;
     private String playerNameInput = "";
     private String statusMessage = "";
     private boolean statusIsError = true;
     private int requestingConfirmation = -1;
     private TrustLevel selectedTrustLevel = TrustLevel.BUILD;
 
-    public ClaimSettingsGui(@Nonnull PlayerRef playerRef, ClaimManager claimManager, PlaytimeManager playtimeManager) {
+    public ClaimSettingsGui(@Nonnull PlayerRef playerRef, ClaimManager claimManager, PlaytimeManager playtimeManager,
+                           Consumer<UUID> onTrustChanged) {
         super(playerRef, CustomPageLifetime.CanDismiss, SettingsData.CODEC);
         this.claimManager = claimManager;
         this.playtimeManager = playtimeManager;
+        this.onTrustChanged = onTrustChanged;
     }
 
     @Override
@@ -119,6 +123,11 @@ public class ClaimSettingsGui extends InteractiveCustomUIPage<ClaimSettingsGui.S
                     claimManager.removeTrust(playerId, targetId);
                     statusMessage = "Removed " + targetName;
                     statusIsError = false;
+
+                    // Refresh map to update trusted player names
+                    if (onTrustChanged != null) {
+                        onTrustChanged.accept(playerId);
+                    }
                 }
                 this.requestingConfirmation = -1;
             }
@@ -174,6 +183,11 @@ public class ClaimSettingsGui extends InteractiveCustomUIPage<ClaimSettingsGui.S
         }
 
         playerNameInput = "";
+
+        // Refresh map to show updated trusted player names
+        if (onTrustChanged != null) {
+            onTrustChanged.accept(ownerId);
+        }
     }
 
     @Override
