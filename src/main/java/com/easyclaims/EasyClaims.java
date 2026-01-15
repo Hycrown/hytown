@@ -326,6 +326,64 @@ public class EasyClaims extends JavaPlugin {
     }
 
     /**
+     * Refreshes all claim chunks for a specific player.
+     * Called when trust is added/removed to update the trusted player names on the map.
+     *
+     * @param playerId The UUID of the claim owner
+     */
+    public void refreshPlayerClaimChunks(java.util.UUID playerId) {
+        var playerClaims = claimStorage.getPlayerClaims(playerId);
+        if (playerClaims == null) {
+            return;
+        }
+
+        // Group claims by world for efficient refresh
+        Map<String, java.util.List<int[]>> claimsByWorld = new HashMap<>();
+        for (var claim : playerClaims.getClaims()) {
+            claimsByWorld.computeIfAbsent(claim.getWorld(), k -> new java.util.ArrayList<>())
+                    .add(new int[]{claim.getChunkX(), claim.getChunkZ()});
+        }
+
+        // Refresh each world's chunks
+        for (var entry : claimsByWorld.entrySet()) {
+            String worldName = entry.getKey();
+            World world = WORLDS.get(worldName);
+            if (world == null) {
+                continue;
+            }
+
+            try {
+                LongSet chunksToRefresh = new LongOpenHashSet();
+                for (int[] coords : entry.getValue()) {
+                    // Add the claim chunk and its neighbors for border updates
+                    for (int dx = -1; dx <= 1; dx++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            chunksToRefresh.add(ChunkUtil.indexChunk(coords[0] + dx, coords[1] + dz));
+                        }
+                    }
+                }
+
+                // Clear server-side cached images
+                world.getWorldMapManager().clearImagesInChunks(chunksToRefresh);
+
+                // Clear each player's client-side cache
+                for (Player player : world.getPlayers()) {
+                    try {
+                        player.getWorldMapTracker().clearChunks(chunksToRefresh);
+                    } catch (Exception e) {
+                        getLogger().atFine().withCause(e).log("[Map] Error clearing chunks for player");
+                    }
+                }
+
+                getLogger().atFine().log("[Map] Refreshed %d claim chunks for player %s in world %s",
+                        entry.getValue().size(), playerId, worldName);
+            } catch (Exception e) {
+                getLogger().atWarning().withCause(e).log("[Map] Error refreshing claims for player %s", playerId);
+            }
+        }
+    }
+
+    /**
      * Gets the map overlay provider for external access.
      */
     public ClaimMapOverlayProvider getMapOverlayProvider() {

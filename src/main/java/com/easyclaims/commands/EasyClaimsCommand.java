@@ -238,7 +238,8 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
                     new ClaimSettingsGui(
                             playerData,
                             plugin.getClaimManager(),
-                            plugin.getPlaytimeManager()
+                            plugin.getPlaytimeManager(),
+                            (playerId) -> plugin.refreshPlayerClaimChunks(playerId)
                     )
             );
         });
@@ -382,6 +383,9 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
 
         plugin.getClaimManager().addTrust(playerData.getUuid(), targetId, targetName, level);
         playerData.sendMessage(Message.raw("Trusted " + targetName + " with " + level.getDescription()).color(GREEN));
+
+        // Refresh map to show updated trusted player names
+        plugin.refreshPlayerClaimChunks(playerData.getUuid());
     }
 
     // ===== UNTRUST =====
@@ -428,6 +432,9 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
 
         plugin.getClaimManager().removeTrust(playerData.getUuid(), targetId);
         playerData.sendMessage(Message.raw("Removed trust from " + targetName).color(GREEN));
+
+        // Refresh map to update trusted player names
+        plugin.refreshPlayerClaimChunks(playerData.getUuid());
     }
 
     // ===== TRUST LIST =====
