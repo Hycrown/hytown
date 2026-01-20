@@ -342,7 +342,7 @@ public class TownStorage {
                         try {
                             Files.copy(file, backupFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                         } catch (IOException e) {
-                            System.err.println("[TownStorage] Warning: Could not create backup for " + town.getName());
+                            System.out.println("\u001B[33m[TownStorage] Warning: Could not create backup for " + town.getName() + "\u001B[0m");
                         }
                     }
 

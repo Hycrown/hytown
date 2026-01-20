@@ -195,7 +195,7 @@ public class FlatfileStorage implements StorageProvider {
                 try {
                     Files.copy(file, backupFile, StandardCopyOption.REPLACE_EXISTING);
                 } catch (IOException e) {
-                    System.err.println("[FlatfileStorage] Warning: Could not create backup for " + town.getName());
+                    System.out.println("\u001B[33m[FlatfileStorage] Warning: Could not create backup for " + town.getName() + "\u001B[0m");
                 }
             }
 
@@ -345,7 +345,7 @@ public class FlatfileStorage implements StorageProvider {
                 Files.deleteIfExists(oldFile);
                 Files.deleteIfExists(oldBackupFile);
             } catch (IOException e) {
-                System.err.println("[FlatfileStorage] Warning: Could not delete old town files: " + e.getMessage());
+                System.out.println("\u001B[33m[FlatfileStorage] Warning: Could not delete old town files: " + e.getMessage() + "\u001B[0m");
             }
         }
 

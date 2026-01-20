@@ -66,14 +66,14 @@ public class SQLStorage implements StorageProvider {
 
         // Only allow alphanumeric and underscore - standard SQL identifier rules
         if (!identifier.matches("^[a-zA-Z][a-zA-Z0-9_]*$")) {
-            System.err.println("[SQLStorage] WARNING: Invalid table prefix '" + identifier +
-                    "' contains illegal characters. Using default: " + defaultValue);
+            System.out.println("\u001B[33m[SQLStorage] WARNING: Invalid table prefix '" + identifier +
+                    "' contains illegal characters. Using default: " + defaultValue + "\u001B[0m");
             return defaultValue;
         }
 
         // Limit length to prevent buffer issues (MySQL max identifier length is 64)
         if (identifier.length() > 32) {
-            System.err.println("[SQLStorage] WARNING: Table prefix too long, truncating to 32 characters");
+            System.out.println("\u001B[33m[SQLStorage] WARNING: Table prefix too long, truncating to 32 characters\u001B[0m");
             identifier = identifier.substring(0, 32);
         }
 

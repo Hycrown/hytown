@@ -78,20 +78,20 @@ public class MongoStorage implements StorageProvider {
         // Only allow alphanumeric and underscore
         // Must start with letter (MongoDB restriction: can't start with number)
         if (!identifier.matches("^[a-zA-Z][a-zA-Z0-9_]*$")) {
-            System.err.println("[MongoStorage] WARNING: Invalid collection prefix '" + identifier +
-                    "' contains illegal characters. Using default: " + defaultValue);
+            System.out.println("\u001B[33m[MongoStorage] WARNING: Invalid collection prefix '" + identifier +
+                    "' contains illegal characters. Using default: " + defaultValue + "\u001B[0m");
             return defaultValue;
         }
 
         // Check for MongoDB reserved prefixes
         if (identifier.toLowerCase().startsWith("system")) {
-            System.err.println("[MongoStorage] WARNING: Collection prefix cannot start with 'system'. Using default: " + defaultValue);
+            System.out.println("\u001B[33m[MongoStorage] WARNING: Collection prefix cannot start with 'system'. Using default: " + defaultValue + "\u001B[0m");
             return defaultValue;
         }
 
         // Limit length (MongoDB max namespace is 120 bytes, but we'll be conservative)
         if (identifier.length() > 32) {
-            System.err.println("[MongoStorage] WARNING: Collection prefix too long, truncating to 32 characters");
+            System.out.println("\u001B[33m[MongoStorage] WARNING: Collection prefix too long, truncating to 32 characters\u001B[0m");
             identifier = identifier.substring(0, 32);
         }
 
@@ -163,7 +163,7 @@ public class MongoStorage implements StorageProvider {
 
             System.out.println("[MongoStorage] Created indexes on collections");
         } catch (Exception e) {
-            System.err.println("[MongoStorage] Warning: Could not create indexes: " + e.getMessage());
+            System.out.println("\u001B[33m[MongoStorage] Warning: Could not create indexes: " + e.getMessage() + "\u001B[0m");
         }
     }
 
