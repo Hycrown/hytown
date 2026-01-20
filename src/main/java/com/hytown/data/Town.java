@@ -35,6 +35,9 @@ public class Town {
     private long lastUpkeepTime = 0;  // When upkeep was last collected
     private int missedUpkeepDays = 0; // How many days of upkeep have been missed
 
+    // Bonus claims - extra claims granted by admins that bypass normal limits
+    private int bonusClaims = 0;
+
     // Transaction history (limited to last 100 entries)
     private static final int MAX_TRANSACTIONS = 100;
     private List<TownTransaction> transactionHistory = new ArrayList<>();
@@ -408,14 +411,24 @@ public class Town {
     // ==================== ECONOMY ====================
 
     public void deposit(double amount) {
+        boolean wasNegative = this.balance < 0;
         this.balance += amount;
+        // Clear debt status if balance is now positive
+        if (wasNegative && this.balance >= 0) {
+            this.missedUpkeepDays = 0;
+        }
     }
 
     /**
      * Deposit with transaction logging.
      */
     public void deposit(double amount, UUID playerId, String playerName) {
+        boolean wasNegative = this.balance < 0;
         this.balance += amount;
+        // Clear debt status if balance is now positive
+        if (wasNegative && this.balance >= 0) {
+            this.missedUpkeepDays = 0;
+        }
         addTransaction(TownTransaction.deposit(playerId, playerName, amount));
     }
 
@@ -565,6 +578,7 @@ public class Town {
 
     public long getLastUpkeepTime() { return lastUpkeepTime; }
     public int getMissedUpkeepDays() { return missedUpkeepDays; }
+    public int getBonusClaims() { return bonusClaims; }
 
     // ==================== SETTERS ====================
 
@@ -584,6 +598,15 @@ public class Town {
     public void setCreatedAt(long createdAt) { this.createdAt = createdAt; }
     public void setLastUpkeepTime(long lastUpkeepTime) { this.lastUpkeepTime = lastUpkeepTime; }
     public void setMissedUpkeepDays(int missedUpkeepDays) { this.missedUpkeepDays = missedUpkeepDays; }
+    public void setBonusClaims(int bonusClaims) { this.bonusClaims = Math.max(0, bonusClaims); }
+    public void addBonusClaims(int amount) { this.bonusClaims = Math.max(0, this.bonusClaims + amount); }
+
+    /**
+     * Get the maximum number of claims this town can have (base limit + bonus).
+     */
+    public int getMaxClaims(int baseLimit) {
+        return baseLimit + bonusClaims;
+    }
 
     // ==================== ENUM ====================
 

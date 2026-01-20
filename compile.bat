@@ -20,5 +20,8 @@ echo Creating JAR...
 cd "target\classes"
 jar -cvf "..\HyTown-1.0.1.jar" .
 
-echo Done!
+echo Deploying to server mods...
 cd /d "%PROJECT%"
+copy /Y "target\HyTown-1.0.1.jar" "C:\Users\Crehop\Desktop\HyCrownDev\mods\"
+
+echo Done! HyTown-1.0.1.jar deployed to mods folder

@@ -4,6 +4,7 @@ import com.hytown.HyTown;
 import com.hytown.data.Town;
 import com.hytown.data.TownStorage;
 import com.hytown.data.TownTransaction;
+import com.hytown.events.*;
 import com.hytown.gui.TownGui;
 import com.hytown.gui.TownHelpGui;
 import com.hytown.managers.ClaimManager;
@@ -58,17 +59,27 @@ public class TownCommand extends AbstractPlayerCommand {
 
     public TownCommand(HyTown plugin) {
         super("town", "Create and manage towns - claim land, invite residents, set permissions. Use /town help for all subcommands");
-        addAliases("t");
+        addAliases("t", "claim");
         setAllowsExtraArguments(true);
         requirePermission("hytown.use");
         this.plugin = plugin;
+    }
+
+    // Track if command was invoked as /claim (to default to claim action)
+    private boolean wasInvokedAsClaim(CommandContext ctx) {
+        String input = ctx.getInputString().trim();
+        if (input.isEmpty()) return false;
+        String[] parts = input.split("\\s+");
+        return parts.length > 0 && parts[0].equalsIgnoreCase("claim");
     }
 
     private String[] parseArgs(CommandContext ctx) {
         String input = ctx.getInputString().trim();
         if (input.isEmpty()) return new String[0];
         String[] allArgs = input.split("\\s+");
-        if (allArgs.length > 0 && (allArgs[0].equalsIgnoreCase("town") || allArgs[0].equalsIgnoreCase("t"))) {
+        // Strip command name (town, t, or claim)
+        if (allArgs.length > 0 && (allArgs[0].equalsIgnoreCase("town") ||
+            allArgs[0].equalsIgnoreCase("t") || allArgs[0].equalsIgnoreCase("claim"))) {
             String[] args = new String[allArgs.length - 1];
             System.arraycopy(allArgs, 1, args, 0, allArgs.length - 1);
             return args;
@@ -81,12 +92,19 @@ public class TownCommand extends AbstractPlayerCommand {
                            @Nonnull Ref<EntityStore> playerRef, @Nonnull PlayerRef playerData, @Nonnull World world) {
 
         String[] args = parseArgs(ctx);
+        boolean invokedAsClaim = wasInvokedAsClaim(ctx);
 
         // Check if player is admin
         Player player = store.getComponent(playerRef, Player.getComponentType());
         boolean isAdmin = player != null && player.hasPermission("hytown.admin");
 
+        // If invoked as /claim with no args, default to claim action
         if (args.length == 0) {
+            if (invokedAsClaim) {
+                // /claim with no args = /town claim
+                handleClaim(store, playerRef, playerData, playerData.getUuid(), world);
+                return;
+            }
             showHelp(playerData, isAdmin);
             return;
         }
@@ -123,6 +141,7 @@ public class TownCommand extends AbstractPlayerCommand {
             case "log" -> handleLog(playerData, playerId, arg1);
             case "board", "motd" -> handleBoard(ctx, playerData, playerId, args);
             case "deny" -> handleDeny(playerData, playerId, arg1);
+            case "rename" -> handleRename(playerData, playerId, playerName, arg1);
             default -> showHelp(playerData, isAdmin);
         }
     }
@@ -151,103 +170,24 @@ public class TownCommand extends AbstractPlayerCommand {
             return;
         }
 
-        TownStorage townStorage = plugin.getTownStorage();
-        Town existingTown = townStorage.getPlayerTown(playerId);
-        if (existingTown != null) {
-            playerData.sendMessage(Message.raw("You are already in town: " + existingTown.getName()).color(RED));
-            return;
-        }
-
-        if (townStorage.townExists(townName)) {
-            playerData.sendMessage(Message.raw("A town with that name already exists!").color(RED));
-            return;
-        }
-
-        if (townName.length() < 3 || townName.length() > 24) {
-            playerData.sendMessage(Message.raw("Town name must be 3-24 characters!").color(RED));
-            return;
-        }
-        if (!townName.matches("^[a-zA-Z0-9_-]+$")) {
-            playerData.sendMessage(Message.raw("Town name can only contain letters, numbers, _ and -").color(RED));
-            return;
-        }
-
-        // Get player position for auto-claiming current chunk
+        // Get player position
         TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
         Vector3d pos = transform.getPosition();
         String worldName = world.getName();
-        int chunkX = ChunkUtil.toChunkX(pos.getX());
-        int chunkZ = ChunkUtil.toChunkZ(pos.getZ());
-        String claimKey = worldName + ":" + chunkX + "," + chunkZ;
 
-        // Check if current chunk can be claimed BEFORE creating town
-        Town existingClaimTown = townStorage.getTownByClaimKey(claimKey);
-        if (existingClaimTown != null) {
-            playerData.sendMessage(Message.raw("Cannot create town here - chunk is claimed by: " + existingClaimTown.getName()).color(RED));
-            return;
-        }
+        // Use shared creation method
+        HyTown.TownCreationResult result = plugin.createTown(
+                townName, playerId, playerName, worldName, pos.getX(), pos.getZ(), true);
 
-        // Check if claimed by personal claim
-        UUID existingOwner = plugin.getClaimManager().getOwnerAt(worldName, pos.getX(), pos.getZ());
-        if (existingOwner != null && !existingOwner.equals(playerId)) {
-            playerData.sendMessage(Message.raw("Cannot create town here - chunk is already claimed!").color(RED));
-            return;
-        }
-
-        // Check if player has enough money (applies to everyone, including ops)
-        double cost = plugin.getPluginConfig().getTownCreationCost();
-        if (cost > 0) {
-            if (!HyConomy.has(playerName, cost)) {
-                playerData.sendMessage(Message.raw("You need " + HyConomy.format(cost) + " to create a town!").color(RED));
-                playerData.sendMessage(Message.raw("Your balance: " + HyConomy.format(HyConomy.getBalance(playerName))).color(GRAY));
-                return;
-            }
-            if (!HyConomy.withdraw(playerName, cost)) {
-                playerData.sendMessage(Message.raw("Failed to withdraw funds!").color(RED));
-                return;
-            }
-        }
-
-        // Create the town
-        Town town = new Town(townName, playerId, playerName);
-
-        // Auto-claim current chunk
-        ClaimManager.ClaimResult claimResult = plugin.getClaimManager().claimChunk(
-                playerId, worldName, pos.getX(), pos.getZ()
-        );
-
-        if (claimResult != ClaimManager.ClaimResult.SUCCESS) {
-            // Refund if claim failed
-            if (cost > 0) {
-                HyConomy.deposit(playerName, cost);
-            }
-            playerData.sendMessage(Message.raw("Cannot create town - failed to claim current chunk!").color(RED));
-            String reason = switch (claimResult) {
-                case ALREADY_OWN -> "You already own this chunk personally";
-                case CLAIMED_BY_OTHER -> "Chunk is claimed by someone else";
-                case LIMIT_REACHED -> "Claim limit reached";
-                case TOO_CLOSE_TO_OTHER_CLAIM -> "Too close to another claim";
-                default -> "Unknown error";
-            };
-            playerData.sendMessage(Message.raw("Reason: " + reason).color(GRAY));
-            return;
-        }
-
-        // Add claim to town and save
-        town.addClaim(claimKey);
-        townStorage.saveTown(town);
-
-        // Refresh map
-        plugin.refreshWorldMapChunk(worldName, chunkX, chunkZ);
-
-        // Convert to block coords for display
-        int blockX = chunkX * 16 + 8;
-        int blockZ = chunkZ * 16 + 8;
-
-        playerData.sendMessage(Message.raw("Town '" + townName + "' created!").color(GREEN));
-        playerData.sendMessage(Message.raw("Origin claim: X=" + blockX + ", Z=" + blockZ).color(GREEN));
-        if (cost > 0) {
-            playerData.sendMessage(Message.raw("Cost: " + HyConomy.format(cost)).color(GRAY));
+        if (result.success()) {
+            playerData.sendMessage(Message.raw(result.message()).color(GREEN));
+            int chunkX = ChunkUtil.toChunkX(pos.getX());
+            int chunkZ = ChunkUtil.toChunkZ(pos.getZ());
+            int blockX = chunkX * 16 + 8;
+            int blockZ = chunkZ * 16 + 8;
+            playerData.sendMessage(Message.raw("Origin claim: X=" + blockX + ", Z=" + blockZ).color(GREEN));
+        } else {
+            playerData.sendMessage(Message.raw(result.message()).color(RED));
         }
     }
 
@@ -266,6 +206,17 @@ public class TownCommand extends AbstractPlayerCommand {
         }
 
         String townName = town.getName();
+
+        // Fire TownDeleteEvent BEFORE deletion (so listeners can still access town data)
+        TownDeleteEvent deleteEvent = new TownDeleteEvent(town, playerId, playerData.getUsername(), false);
+        plugin.getEventBus().fire(deleteEvent);
+
+        // Fire TownLeaveEvent for all residents
+        for (UUID residentId : town.getResidents()) {
+            String residentName = town.getResidentName(residentId);
+            TownLeaveEvent leaveEvent = TownLeaveEvent.townDeleted(town, residentId, residentName);
+            plugin.getEventBus().fire(leaveEvent);
+        }
 
         for (String claimKey : town.getClaimKeys()) {
             String[] parts = claimKey.split(":");
@@ -356,6 +307,11 @@ public class TownCommand extends AbstractPlayerCommand {
         if (result == ClaimManager.ClaimResult.SUCCESS) {
             town.addClaim(claimKey);
             townStorage.saveTown(town);
+
+            // Fire TownClaimEvent
+            TownClaimEvent claimEvent = new TownClaimEvent(town, claimKey, worldName, chunkX, chunkZ, playerId, playerName);
+            plugin.getEventBus().fire(claimEvent);
+
             String costMsg = cost > 0 ? " (Cost: " + HyConomy.format(cost) + ")" : "";
             playerData.sendMessage(Message.raw("Claimed chunk [" + chunkX + ", " + chunkZ + "] for " + town.getName() + costMsg).color(GREEN));
             plugin.refreshWorldMapChunk(worldName, chunkX, chunkZ);
@@ -414,6 +370,10 @@ public class TownCommand extends AbstractPlayerCommand {
             town.setPlotOwner(claimKey, null);
 
             townStorage.saveTown(town);
+
+            // Fire TownUnclaimEvent
+            TownUnclaimEvent unclaimEvent = new TownUnclaimEvent(town, claimKey, worldName, chunkX, chunkZ, playerId, playerData.getUsername());
+            plugin.getEventBus().fire(unclaimEvent);
 
             playerData.sendMessage(Message.raw("Successfully unclaimed chunk [" + chunkX + ", " + chunkZ + "] from " + town.getName()).color(GREEN));
             playerData.sendMessage(Message.raw("Remaining claims: " + town.getClaimCount() + "/" + plugin.getPluginConfig().getMaxTownClaims()).color(GRAY));
@@ -553,6 +513,11 @@ public class TownCommand extends AbstractPlayerCommand {
         }
 
         String kickedName = town.getResidentName(targetId);
+
+        // Fire TownLeaveEvent BEFORE removing
+        TownLeaveEvent leaveEvent = TownLeaveEvent.kicked(town, targetId, kickedName, playerId, playerData.getUsername());
+        plugin.getEventBus().fire(leaveEvent);
+
         town.removeResident(targetId);
         town.logMemberKick(playerId, playerData.getUsername(), kickedName);
         townStorage.saveTown(town);
@@ -575,12 +540,26 @@ public class TownCommand extends AbstractPlayerCommand {
                 playerData.sendMessage(Message.raw("You must transfer mayor first! Use /town set mayor <player>").color(RED));
                 return;
             }
+
+            // Fire TownLeaveEvent for mayor (as town deleted)
+            TownLeaveEvent leaveEvent = TownLeaveEvent.townDeleted(town, playerId, playerData.getUsername());
+            plugin.getEventBus().fire(leaveEvent);
+
+            // Fire TownDeleteEvent
+            TownDeleteEvent deleteEvent = new TownDeleteEvent(town, playerId, playerData.getUsername(), false);
+            plugin.getEventBus().fire(deleteEvent);
+
             townStorage.deleteTown(town.getName());
             playerData.sendMessage(Message.raw("You left and " + town.getName() + " has been disbanded.").color(YELLOW));
             return;
         }
 
         String leavingName = playerData.getUsername();
+
+        // Fire TownLeaveEvent
+        TownLeaveEvent leaveEvent = TownLeaveEvent.voluntary(town, playerId, leavingName);
+        plugin.getEventBus().fire(leaveEvent);
+
         town.logMemberLeave(playerId, leavingName);
         town.removeResident(playerId);
         townStorage.saveTown(town);
@@ -641,6 +620,10 @@ public class TownCommand extends AbstractPlayerCommand {
         town.logMemberJoin(playerId, playerName);
         townStorage.saveTown(town);
         townStorage.indexPlayer(playerId, town.getName());
+
+        // Fire TownJoinEvent
+        TownJoinEvent joinEvent = new TownJoinEvent(town, playerId, playerName, hasInvite);
+        plugin.getEventBus().fire(joinEvent);
 
         playerData.sendMessage(Message.raw("You joined " + town.getName() + "!").color(GREEN));
 
@@ -990,8 +973,18 @@ public class TownCommand extends AbstractPlayerCommand {
                     playerData.sendMessage(Message.raw(value + " is not in your town!").color(RED));
                     return;
                 }
+
+                // Store old mayor info for event
+                UUID oldMayorId = town.getMayorId();
+                String oldMayorName = town.getMayorName();
+
                 town.setMayor(newMayorId, newMayorName);
                 townStorage.saveTown(town);
+
+                // Fire TownMayorChangeEvent
+                TownMayorChangeEvent mayorEvent = new TownMayorChangeEvent(town, oldMayorId, oldMayorName, newMayorId, newMayorName, false);
+                plugin.getEventBus().fire(mayorEvent);
+
                 playerData.sendMessage(Message.raw(newMayorName + " is now the mayor!").color(GREEN));
             }
             default -> playerData.sendMessage(Message.raw("Unknown setting: " + setting).color(RED));
@@ -1275,6 +1268,89 @@ public class TownCommand extends AbstractPlayerCommand {
         }
     }
 
+    private void handleRename(PlayerRef playerData, UUID playerId, String playerName, String newName) {
+        if (newName == null || newName.isEmpty()) {
+            playerData.sendMessage(Message.raw("Usage: /town rename <newname>").color(RED));
+            return;
+        }
+
+        TownStorage townStorage = plugin.getTownStorage();
+        Town town = townStorage.getPlayerTown(playerId);
+
+        if (town == null) {
+            playerData.sendMessage(Message.raw("You are not in a town!").color(RED));
+            return;
+        }
+
+        if (!town.isMayor(playerId)) {
+            playerData.sendMessage(Message.raw("Only the mayor can rename the town!").color(RED));
+            return;
+        }
+
+        String oldName = town.getName();
+
+        // Validate new name
+        if (newName.length() < 3 || newName.length() > 24) {
+            playerData.sendMessage(Message.raw("Town name must be 3-24 characters!").color(RED));
+            return;
+        }
+        if (!newName.matches("^[a-zA-Z0-9_-]+$")) {
+            playerData.sendMessage(Message.raw("Town name can only contain letters, numbers, _ and -").color(RED));
+            return;
+        }
+
+        // Check if new name already exists (case-insensitive, but allow case change for same town)
+        if (townStorage.townExists(newName) && !oldName.equalsIgnoreCase(newName)) {
+            playerData.sendMessage(Message.raw("A town with that name already exists!").color(RED));
+            return;
+        }
+
+        // Check for rename cost (same as creation cost)
+        double cost = plugin.getPluginConfig().getTownCreationCost() / 2; // Half of creation cost
+        if (cost > 0) {
+            if (!HyConomy.has(playerName, cost)) {
+                playerData.sendMessage(Message.raw("You need " + HyConomy.format(cost) + " to rename the town!").color(RED));
+                playerData.sendMessage(Message.raw("Your balance: " + HyConomy.format(HyConomy.getBalance(playerName))).color(GRAY));
+                return;
+            }
+            if (!HyConomy.withdraw(playerName, cost)) {
+                playerData.sendMessage(Message.raw("Failed to withdraw funds!").color(RED));
+                return;
+            }
+        }
+
+        // Perform the rename
+        if (!townStorage.renameTown(oldName, newName)) {
+            // Refund if rename failed
+            if (cost > 0) {
+                HyConomy.deposit(playerName, cost);
+            }
+            playerData.sendMessage(Message.raw("Failed to rename town!").color(RED));
+            return;
+        }
+
+        // Get the updated town object
+        Town renamedTown = townStorage.getTown(newName);
+
+        // Fire TownRenameEvent
+        TownRenameEvent renameEvent = new TownRenameEvent(renamedTown, oldName, newName, playerId, playerName);
+        plugin.getEventBus().fire(renameEvent);
+
+        playerData.sendMessage(Message.raw("Town renamed from '" + oldName + "' to '" + newName + "'!").color(GREEN));
+        if (cost > 0) {
+            playerData.sendMessage(Message.raw("Cost: " + HyConomy.format(cost)).color(GRAY));
+        }
+
+        // Notify all online town members
+        for (World w : HyTown.WORLDS.values()) {
+            for (Player p : w.getPlayers()) {
+                if (renamedTown.isMember(p.getUuid()) && !p.getUuid().equals(playerId)) {
+                    p.sendMessage(Message.raw("Your town has been renamed to '" + newName + "'!").color(GOLD));
+                }
+            }
+        }
+    }
+
     private void showHelp(PlayerRef playerData, boolean isAdmin) {
         playerData.sendMessage(Message.raw("========== TOWN COMMANDS ==========").color(GOLD));
         playerData.sendMessage(Message.raw("Use /town help for the full GUI help menu").color(GRAY));
@@ -1282,6 +1358,7 @@ public class TownCommand extends AbstractPlayerCommand {
         // Creation & Deletion
         playerData.sendMessage(Message.raw("--- Creation & Deletion ---").color(GOLD));
         playerData.sendMessage(Message.raw("/town new <name> - Create a new town (3-24 chars)").color(WHITE));
+        playerData.sendMessage(Message.raw("/town rename <name> - Rename your town (mayor)").color(WHITE));
         playerData.sendMessage(Message.raw("/town delete - Permanently delete your town (mayor)").color(WHITE));
 
         // Land Management

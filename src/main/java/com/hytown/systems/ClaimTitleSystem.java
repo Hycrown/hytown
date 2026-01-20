@@ -91,7 +91,8 @@ public class ClaimTitleSystem extends EntityTickingSystem<EntityStore> {
 
             // Town claim
             titleText = rankName + ": " + town.getName();
-            boolean isOverdue = town.getMissedUpkeepDays() > 0;
+            // Town is only overdue if it has missed days AND balance is still negative
+            boolean isOverdue = town.getMissedUpkeepDays() > 0 && town.getBalance() < 0;
             boolean pvpEnabled = town.getSettings().isPvpEnabled();
 
             // Build subtitle with PVP status
@@ -99,6 +100,16 @@ public class ClaimTitleSystem extends EntityTickingSystem<EntityStore> {
             Color pvpColor = pvpEnabled ? RED : GREEN;
 
             if (town.isMember(playerRef.getUuid())) {
+                // Try to clear debt if town now has positive balance
+                if (town.getMissedUpkeepDays() > 0 && town.getBalance() >= 0) {
+                    town.setMissedUpkeepDays(0);
+                    if (townStorage != null) {
+                        townStorage.saveTown(town);
+                    }
+                    playerRef.sendMessage(Message.raw("[Town] Debt cleared! Your town is back in good standing.").color(GREEN));
+                    isOverdue = false; // Update the flag
+                }
+
                 if (isOverdue) {
                     // Show warning for overdue town
                     titleMessage = Message.raw(rankName + ": " + town.getName()).color(RED);

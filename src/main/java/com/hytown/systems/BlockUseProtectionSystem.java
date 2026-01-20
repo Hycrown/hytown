@@ -93,6 +93,11 @@ public class BlockUseProtectionSystem extends EntityEventSystem<EntityStore, Use
         UUID playerId = playerRef.getUuid();
         String worldName = player.getWorld().getName();
 
+        // Admin bypass - can use any block anywhere
+        if (player.hasPermission("hytown.admin")) {
+            return;
+        }
+
         // Determine required trust level based on block type
         BlockType blockType = event.getBlockType();
         TrustLevel requiredLevel = getRequiredTrustLevel(blockType);

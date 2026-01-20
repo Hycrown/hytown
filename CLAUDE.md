@@ -336,7 +336,12 @@ Located at `Server/permissions.json`:
 | Permission | Description |
 |------------|-------------|
 | `hytown.use` | Basic access to /hytown command |
-| `hytown.admin` | Admin commands (config, set, reload, unclaim) |
+| `hytown.admin` | Full admin - bypasses all protections |
+| `hytown.town.break.bypass` | Break blocks in other players' towns/claims |
+| `hytown.town.place.bypass` | Place blocks in other players' towns/claims |
+| `hytown.wild.bypass` | Bypass all wilderness protection (break + place) |
+| `hytown.wild.break.bypass` | Break blocks in protected wilderness |
+| `hytown.wild.place.bypass` | Place blocks in protected wilderness |
 
 ## Messages (No Minecraft Color Codes!)
 ```java
@@ -378,6 +383,190 @@ world.execute(() -> {
 Path dataDir = getDataDirectory();  // mods/Group_PluginName/
 Gson gson = new GsonBuilder().setPrettyPrinting().create();  // Gson provided by Hytale
 ```
+
+## Custom UI Files
+
+### CRITICAL: IncludesAssetPack Flag
+If your plugin includes custom `.ui` files, you **MUST** add this to your `manifest.json`:
+```json
+{
+    "Group": "YourGroup",
+    "Name": "YourPlugin",
+    "Version": "1.0.0",
+    "Main": "com.yourplugin.YourPlugin",
+    "IncludesAssetPack": true
+}
+```
+
+**Without `"IncludesAssetPack": true`, the server will NOT load your UI files from the JAR!**
+
+### UI File Location in JAR
+Custom UI files must be placed at:
+```
+src/main/resources/Common/UI/Custom/Pages/yourplugin_PageName.ui
+```
+
+This will be bundled into the JAR as:
+```
+Common/UI/Custom/Pages/yourplugin_PageName.ui
+```
+
+### UI File Syntax
+```
+$C = "../Common.ui";
+
+$C.@PageOverlay {}
+
+$C.@DecoratedContainer {
+  Anchor: (Width: 650, Height: 900);  // Width and Height of the container
+
+  #Title {
+    $C.@Title {
+      @Text = "Page Title";
+    }
+  }
+
+  #Content {
+    LayoutMode: Top;
+    Padding: (Full: 16);
+
+    Label #MyLabel {
+      Text: "";
+      Style: $C.@DefaultLabelStyle;
+      Anchor: (Bottom: 12);
+    }
+
+    Group {
+      Anchor: (Vertical: 4, Height: 1);
+      Background: #5e512c;  // Separator line
+    }
+
+    $C.@TextButton #MyButton {
+      Text: "Click Me";
+    }
+
+    $C.@TextField #MyInput {
+      @Anchor = (Width: 300, Height: 38);
+    }
+
+    $C.@CheckBoxWithLabel #MyToggle {
+      @Text = "Enable Feature";
+    }
+  }
+}
+
+$C.@BackButton {}
+```
+
+### Available UI Components (from Common.ui)
+- `$C.@PageOverlay {}` - Required overlay background
+- `$C.@DecoratedContainer {}` - Main container with border
+- `$C.@Title { @Text = "Title"; }` - Page title
+- `$C.@TextButton #Id { Text: "Label"; }` - Clickable button
+- `$C.@TextField #Id { @Anchor = (Width: 300, Height: 38); }` - Text input
+- `$C.@CheckBoxWithLabel #Id { @Text = "Label"; }` - Checkbox with label
+- `$C.@BackButton {}` - Back/close button
+- `$C.@DefaultLabelStyle` - Standard label styling
+- `Label #Id { Text: ""; Style: $C.@DefaultLabelStyle; }` - Text label
+
+### Loading UI in Java (BasicCustomUIPage)
+```java
+public class MyPage extends BasicCustomUIPage {
+    @Override
+    public void build(UICommandBuilder builder) {
+        builder.append("Pages/yourplugin_PageName.ui");
+        builder.set("#MyLabel.Text", "Hello World");
+        builder.set("#MyButton.Visible", true);
+    }
+}
+```
+
+### Loading UI in Java (InteractiveCustomUIPage)
+For interactive pages with buttons and input fields:
+```java
+public class MyGui extends InteractiveCustomUIPage<MyGui.MyData> {
+
+    public MyGui(PlayerRef playerRef) {
+        super(playerRef, CustomPageLifetime.CanDismiss, MyData.CODEC);
+    }
+
+    @Override
+    public void build(Ref<EntityStore> ref, UICommandBuilder cmd,
+                      UIEventBuilder evt, Store<EntityStore> store) {
+        cmd.append("Pages/yourplugin_PageName.ui");
+        cmd.set("#MyLabel.Text", "Hello");
+
+        // Bind button click
+        evt.addEventBinding(CustomUIEventBindingType.Activating, "#MyButton",
+                EventData.of("Action", "button_clicked"), false);
+
+        // Bind text input changes
+        evt.addEventBinding(CustomUIEventBindingType.ValueChanged, "#MyInput",
+                EventData.of("@InputValue", "#MyInput.Value"), false);
+    }
+
+    @Override
+    public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, MyData data) {
+        if ("button_clicked".equals(data.action)) {
+            // Handle button click
+        }
+        // Rebuild UI
+        UICommandBuilder cmd = new UICommandBuilder();
+        UIEventBuilder evt = new UIEventBuilder();
+        this.build(ref, cmd, evt, store);
+        this.sendUpdate(cmd, evt, true);
+    }
+
+    public static class MyData {
+        public static final BuilderCodec<MyData> CODEC = BuilderCodec.<MyData>builder(MyData.class, MyData::new)
+                .addField(new KeyedCodec<>("Action", Codec.STRING),
+                        (data, s) -> data.action = s, data -> data.action)
+                .addField(new KeyedCodec<>("@InputValue", Codec.STRING),
+                        (data, s) -> data.inputValue = s, data -> data.inputValue)
+                .build();
+
+        private String action;
+        private String inputValue;
+    }
+}
+```
+
+### Common UI Styling
+```
+// Label with color
+Label #ColoredLabel {
+  Text: "Colored Text";
+  Style: (...$C.@DefaultLabelStyle, TextColor: #55ff55);
+}
+
+// Bold uppercase label
+Label #HeaderLabel {
+  Text: "HEADER";
+  Style: (...$C.@DefaultLabelStyle, RenderBold: true, RenderUppercase: true);
+}
+
+// Horizontal layout group
+Group {
+  LayoutMode: Left;
+
+  Label { Text: "Left"; }
+  Label { FlexWeight: 1; }  // Spacer
+  Label { Text: "Right"; }
+}
+
+// Vertical spacing
+Anchor: (Bottom: 12);  // 12px margin below
+Anchor: (Top: 8);      // 8px margin above
+```
+
+### Plugin Data Folder vs Asset Pack
+- **Plugin data folder**: `mods/Group_PluginName/` - for config.json, data files
+  - Created automatically, no manifest.json needed
+  - Just JSON/data files, NOT UI files
+- **Asset pack in JAR**: UI files bundled in JAR with `IncludesAssetPack: true`
+  - UI files loaded by asset system from JAR
+
+**DO NOT** create a separate folder with manifest.json for UI files - the server will try to load it as a full content mod and crash looking for world data.
 
 ## Building & Installation
 ```bash

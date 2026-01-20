@@ -98,35 +98,48 @@ public class BlockBreakProtectionSystem extends EntityEventSystem<EntityStore, B
         UUID playerId = playerRef.getUuid();
         String worldName = player.getWorld().getName();
 
-        // Check if this chunk is claimed
+        // Admin bypass - can break blocks anywhere
+        if (player.hasPermission("hytown.admin")) {
+            return;
+        }
+
+        // Check chunk coordinates for claim lookups
+        int chunkX = ChunkUtil.toChunkX(targetBlock.getX());
+        int chunkZ = ChunkUtil.toChunkZ(targetBlock.getZ());
+        String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+        // Check if it's a town claim FIRST
+        Town town = townStorage != null ? townStorage.getTownByClaimKey(claimKey) : null;
+
+        if (town != null) {
+            // Town bypass permission
+            if (player.hasPermission("hytown.town.builder") || player.hasPermission("hytown.town.break.bypass")) {
+                return;
+            }
+            // Town claim - check if player is a member
+            if (town.isMember(playerId)) {
+                return; // Town members can build
+            }
+            // Check town settings for outsiders
+            if (town.getSettings().canOutsiderDestroy()) {
+                return;
+            }
+            // Not allowed
+            event.setCancelled(true);
+            if (canSendMessage(playerId)) {
+                player.sendMessage(Message.raw("You cannot destroy blocks in " + town.getName()).color(RED));
+            }
+            return;
+        }
+
+        // Check if this chunk is a personal claim
         UUID claimOwner = claimManager.getOwnerAt(worldName, targetBlock.getX(), targetBlock.getZ());
 
         if (claimOwner != null) {
-            // CLAIMED LAND - check permission
-            int chunkX = ChunkUtil.toChunkX(targetBlock.getX());
-            int chunkZ = ChunkUtil.toChunkZ(targetBlock.getZ());
-            String claimKey = worldName + ":" + chunkX + "," + chunkZ;
-
-            // Check if it's a town claim
-            Town town = townStorage != null ? townStorage.getTownByClaimKey(claimKey) : null;
-
-            if (town != null) {
-                // Town claim - check if player is a member
-                if (town.isMember(playerId)) {
-                    return; // Town members can build
-                }
-                // Check town settings for outsiders
-                if (town.getSettings().canOutsiderDestroy()) {
-                    return;
-                }
-                // Not allowed
-                event.setCancelled(true);
-                if (canSendMessage(playerId)) {
-                    player.sendMessage(Message.raw("You cannot destroy blocks in " + town.getName()).color(RED));
-                }
+            // Personal claim bypass permission
+            if (player.hasPermission("hytown.town.builder") || player.hasPermission("hytown.town.break.bypass")) {
                 return;
             }
-
             // Personal claim - check trust level
             if (!claimManager.hasPermissionAt(playerId, worldName, targetBlock.getX(), targetBlock.getZ(), TrustLevel.BUILD)) {
                 event.setCancelled(true);
@@ -137,8 +150,8 @@ public class BlockBreakProtectionSystem extends EntityEventSystem<EntityStore, B
         } else {
             // WILDERNESS - check wild protection
             if (config.isWildProtectionEnabled()) {
-                // Check bypass permission
-                if (player.hasPermission("hytown.wild.bypass")) {
+                // Check bypass permissions (general or specific)
+                if (player.hasPermission("hytown.town.builder") || player.hasPermission("hytown.wild.bypass") || player.hasPermission("hytown.wild.break.bypass")) {
                     return;
                 }
 
