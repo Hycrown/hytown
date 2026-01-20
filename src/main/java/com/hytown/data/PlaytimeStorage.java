@@ -58,14 +58,29 @@ public class PlaytimeStorage {
         if (data == null) return;
 
         Path file = playtimeDirectory.resolve(playerId.toString() + ".json");
+        Path tempFile = playtimeDirectory.resolve(playerId.toString() + ".json.tmp");
 
         PlaytimeJson json = new PlaytimeJson();
         json.totalPlaytimeSeconds = data.getTotalPlaytimeSeconds();
 
+        // Atomic write using temp file
         try {
-            Files.writeString(file, gson.toJson(json));
+            String jsonStr = gson.toJson(json);
+            Files.writeString(tempFile, jsonStr);
+            Files.move(tempFile, file,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            // Fallback for filesystems that don't support atomic move
+            try {
+                Files.writeString(file, gson.toJson(json));
+                Files.deleteIfExists(tempFile);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
         } catch (IOException e) {
             e.printStackTrace();
+            try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
         }
     }
 

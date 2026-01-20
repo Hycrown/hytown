@@ -83,10 +83,25 @@ public class ClaimStorage {
             toSave.put(worldEntry.getKey(), worldClaims);
         }
 
+        // Atomic write using temp file
+        Path tempFile = claimsDirectory.resolve("index.json.tmp");
         try {
-            Files.writeString(indexFile, gson.toJson(toSave));
+            String json = gson.toJson(toSave);
+            Files.writeString(tempFile, json);
+            Files.move(tempFile, indexFile,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            // Fallback for filesystems that don't support atomic move
+            try {
+                Files.writeString(indexFile, gson.toJson(toSave));
+                Files.deleteIfExists(tempFile);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
         } catch (IOException e) {
             e.printStackTrace();
+            try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
         }
     }
 
@@ -114,10 +129,26 @@ public class ClaimStorage {
         for (Map.Entry<UUID, String> entry : playerNames.entrySet()) {
             toSave.put(entry.getKey().toString(), entry.getValue());
         }
+
+        // Atomic write using temp file
+        Path tempFile = claimsDirectory.resolve("names.json.tmp");
         try {
-            Files.writeString(namesFile, gson.toJson(toSave));
+            String json = gson.toJson(toSave);
+            Files.writeString(tempFile, json);
+            Files.move(tempFile, namesFile,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            // Fallback for filesystems that don't support atomic move
+            try {
+                Files.writeString(namesFile, gson.toJson(toSave));
+                Files.deleteIfExists(tempFile);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
         } catch (IOException e) {
             e.printStackTrace();
+            try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
         }
     }
 
@@ -281,10 +312,25 @@ public class ClaimStorage {
             data.trustedPlayersData.put(entry.getKey().toString(), tpj);
         }
 
+        // Atomic write using temp file
+        Path tempFile = claimsDirectory.resolve(playerId.toString() + ".json.tmp");
         try {
-            Files.writeString(file, gson.toJson(data));
+            String json = gson.toJson(data);
+            Files.writeString(tempFile, json);
+            Files.move(tempFile, file,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            // Fallback for filesystems that don't support atomic move
+            try {
+                Files.writeString(file, gson.toJson(data));
+                Files.deleteIfExists(tempFile);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
         } catch (IOException e) {
             e.printStackTrace();
+            try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
         }
     }
 

@@ -302,13 +302,16 @@ public class TownStorage {
 
     /**
      * Save a single town using the configured storage provider.
+     * Returns true if save was successful.
      */
-    public void saveTown(Town town) {
+    public boolean saveTown(Town town) {
+        boolean success = false;
+
         // Save to provider
         if (saveProvider != null) {
             try {
                 saveProvider.saveTown(town);
-                dirty = false;
+                success = true;
             } catch (Exception e) {
                 System.err.println("[TownStorage] ERROR saving town " + town.getName() + " to " + saveProvider.getName() + ": " + e.getMessage());
                 e.printStackTrace();
@@ -323,7 +326,7 @@ public class TownStorage {
                     String json = gson.toJson(town);
                     if (json == null || json.trim().isEmpty()) {
                         System.err.println("[TownStorage] ERROR: Empty JSON generated for town: " + town.getName());
-                        return;
+                        return false;
                     }
 
                     Files.writeString(tempFile, json);
@@ -331,7 +334,7 @@ public class TownStorage {
                     if (!json.equals(verification)) {
                         System.err.println("[TownStorage] ERROR: Verification failed for town: " + town.getName());
                         Files.deleteIfExists(tempFile);
-                        return;
+                        return false;
                     }
 
                     if (Files.exists(file)) {
@@ -345,13 +348,14 @@ public class TownStorage {
 
                     Files.move(tempFile, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
                             java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-                    dirty = false;
+                    success = true;
 
                 } catch (java.nio.file.AtomicMoveNotSupportedException e) {
                     try {
                         String json = gson.toJson(town);
                         Files.writeString(file, json);
                         Files.deleteIfExists(tempFile);
+                        success = true;
                     } catch (IOException ex) {
                         System.err.println("[TownStorage] ERROR saving town " + town.getName() + ": " + ex.getMessage());
                     }
@@ -362,7 +366,13 @@ public class TownStorage {
             }
         }
 
-        // Update in-memory indexes
+        // Only update dirty flag if save was successful
+        if (success) {
+            dirty = false;
+        }
+
+        // Update in-memory indexes regardless of save success
+        // (the data is in memory, we just failed to persist it)
         String nameLower = town.getName().toLowerCase();
         townsByName.put(nameLower, town);
 
@@ -371,6 +381,8 @@ public class TownStorage {
         for (String claimKey : town.getClaimKeys()) {
             claimToTown.put(claimKey, town.getName());
         }
+
+        return success;
     }
 
     /**
@@ -563,32 +575,68 @@ public class TownStorage {
             // Step 6: Re-add to cache with new name
             townsByName.put(newNameLower, town);
 
-            // Step 7: Delete old entry from storage provider
+            // Step 7: Save the renamed town using provider's atomic rename
+            boolean saveSuccess = false;
             if (saveProvider != null) {
                 try {
-                    saveProvider.deleteTown(oldName);
+                    // Use provider's renameTown which has transaction support
+                    saveProvider.renameTown(oldName, newName, town);
+                    saveSuccess = true;
                 } catch (Exception e) {
-                    System.err.println("[TownStorage] Warning: Could not delete old town from storage: " + e.getMessage());
+                    System.err.println("[TownStorage] ERROR: Failed to rename town in storage: " + e.getMessage());
+                    e.printStackTrace();
+                    // Rollback in-memory changes
+                    town.setName(oldName);
+                    townsByName.remove(newNameLower);
+                    townsByName.put(oldNameLower, town);
+                    for (String claimKey : town.getClaimKeys()) {
+                        claimToTown.put(claimKey, oldName);
+                    }
+                    for (UUID residentId : town.getResidents()) {
+                        playerToTown.put(residentId, oldName);
+                    }
+                    return false;
                 }
             } else {
-                // Fallback to legacy file deletion
+                // Fallback to legacy file rename (save new first, then delete old)
+                Path newFile = townsDirectory.resolve(sanitize(newName) + ".json");
                 Path oldFile = townsDirectory.resolve(sanitize(oldName) + ".json");
                 Path oldBackupFile = townsDirectory.resolve(sanitize(oldName) + ".json.bak");
+
                 try {
-                    Files.deleteIfExists(oldFile);
-                    Files.deleteIfExists(oldBackupFile);
+                    // Save with new name first
+                    String json = gson.toJson(town);
+                    Files.writeString(newFile, json);
+
+                    // Then delete old files (only if names are different)
+                    if (!oldName.equalsIgnoreCase(newName)) {
+                        Files.deleteIfExists(oldFile);
+                        Files.deleteIfExists(oldBackupFile);
+                    }
+                    saveSuccess = true;
                 } catch (IOException e) {
-                    System.err.println("[TownStorage] Warning: Could not delete old file: " + e.getMessage());
+                    System.err.println("[TownStorage] ERROR: Failed to rename town file: " + e.getMessage());
+                    // Rollback in-memory changes
+                    town.setName(oldName);
+                    townsByName.remove(newNameLower);
+                    townsByName.put(oldNameLower, town);
+                    for (String claimKey : town.getClaimKeys()) {
+                        claimToTown.put(claimKey, oldName);
+                    }
+                    for (UUID residentId : town.getResidents()) {
+                        playerToTown.put(residentId, oldName);
+                    }
+                    return false;
                 }
             }
 
-            // Step 8: Save with new name
-            saveTown(town);
+            // Step 8: Save index (for invite updates) only if rename succeeded
+            if (saveSuccess) {
+                saveIndex();
+                dirty = false;
+            }
 
-            // Step 10: Save index (for invite updates)
-            saveIndex();
-
-            return true;
+            return saveSuccess;
         }
     }
 

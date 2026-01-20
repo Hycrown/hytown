@@ -318,4 +318,42 @@ public class FlatfileStorage implements StorageProvider {
     public Path getTownsDirectory() {
         return townsDirectory;
     }
+
+    /**
+     * Flatfile storage doesn't support true transactions,
+     * but uses atomic file operations for safety.
+     */
+    @Override
+    public boolean supportsTransactions() {
+        return false;  // No true ACID transactions, but atomic file ops
+    }
+
+    /**
+     * Rename a town by saving new file first, then deleting old.
+     * This ensures data isn't lost if something goes wrong.
+     */
+    @Override
+    public void renameTown(String oldName, String newName, Town town) {
+        // Save with new name first (atomic write)
+        saveTown(town);
+
+        // Delete old file only if names are different
+        if (!oldName.equalsIgnoreCase(newName)) {
+            Path oldFile = townsDirectory.resolve(sanitize(oldName) + ".json");
+            Path oldBackupFile = townsDirectory.resolve(sanitize(oldName) + ".json.bak");
+            try {
+                Files.deleteIfExists(oldFile);
+                Files.deleteIfExists(oldBackupFile);
+            } catch (IOException e) {
+                System.err.println("[FlatfileStorage] Warning: Could not delete old town files: " + e.getMessage());
+            }
+        }
+
+        System.out.println("[FlatfileStorage] Renamed town '" + oldName + "' to '" + newName + "'");
+    }
+
+    @Override
+    public String getConnectionInfo() {
+        return "Flatfile (JSON) - " + townsDirectory.toAbsolutePath();
+    }
 }
