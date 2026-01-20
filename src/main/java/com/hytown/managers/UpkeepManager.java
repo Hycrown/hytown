@@ -209,12 +209,14 @@ public class UpkeepManager {
     /**
      * Check if a town is overdue on upkeep and return warning message if so.
      * Called when player logs in or enters town territory.
+     * Only returns warning if town has missed days AND is still in debt.
      */
     public String getOverdueWarning(Town town) {
         if (town == null) return null;
 
         int missedDays = town.getMissedUpkeepDays();
-        if (missedDays > 0) {
+        // Only show warning if actually in debt (balance < 0)
+        if (missedDays > 0 && town.getBalance() < 0) {
             int daysUntilDeletion = GRACE_PERIOD_DAYS - missedDays;
             if (daysUntilDeletion <= 0) {
                 return String.format("CRITICAL: Town '%s' will be deleted! Debt: $%.2f",
@@ -228,17 +230,35 @@ public class UpkeepManager {
     }
 
     /**
-     * Check if a town is overdue.
+     * Check if a town is overdue (has missed upkeep AND is still in debt).
      */
     public boolean isOverdue(Town town) {
-        return town != null && town.getMissedUpkeepDays() > 0;
+        return town != null && town.getMissedUpkeepDays() > 0 && town.getBalance() < 0;
     }
 
     /**
      * Warn a player if their town is overdue on upkeep.
+     * Also attempts to clear debt if town now has positive balance.
      */
     public void warnIfOverdue(java.util.UUID playerId) {
         Town town = townStorage.getPlayerTown(playerId);
+        if (town == null) return;
+
+        // Try to clear debt if town now has positive balance
+        if (town.getMissedUpkeepDays() > 0 && town.getBalance() >= 0) {
+            town.setMissedUpkeepDays(0);
+            townStorage.saveTown(town);
+            try {
+                PlayerRef player = Universe.get().getPlayer(playerId);
+                if (player != null) {
+                    player.sendMessage(Message.raw("[Town] Debt cleared! Your town is back in good standing.").color(GREEN));
+                }
+            } catch (Exception e) {
+                // Player not online, ignore
+            }
+            return; // No warning needed, debt is cleared
+        }
+
         String warning = getOverdueWarning(town);
         if (warning != null) {
             try {

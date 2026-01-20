@@ -27,25 +27,28 @@ public class HyTownAccess {
     public static void init(ClaimStorage storage, TownStorage towns) {
         claimStorage = storage;
         townStorage = towns;
-        System.out.println("[HyTownAccess] Initialized with claimStorage: " + (storage != null ? "OK" : "NULL") +
-                           ", townStorage: " + (towns != null ? "OK" : "NULL"));
     }
 
     /**
      * Gets the owner of a chunk, or null if unclaimed.
+     * Checks BOTH town claims and personal claims.
+     * For town claims, returns the town owner's UUID.
      * Used by ClaimImageBuilder to determine claim colors.
      */
     public static UUID getClaimOwner(String worldName, int chunkX, int chunkZ) {
+        // Check if this chunk belongs to a town FIRST
+        if (townStorage != null) {
+            String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+            Town town = townStorage.getTownByClaimKey(claimKey);
+            if (town != null) {
+                return town.getMayorId();
+            }
+        }
+
         if (claimStorage == null) {
-            System.out.println("[HyTownAccess] ERROR: claimStorage is null!");
             return null;
         }
-        UUID owner = claimStorage.getClaimOwner(worldName, chunkX, chunkZ);
-        // Debug: log when we find a claim (first few only to avoid spam)
-        if (owner != null) {
-            System.out.println("[HyTownAccess] Found claim at " + worldName + " " + chunkX + "," + chunkZ + " owner=" + owner);
-        }
-        return owner;
+        return claimStorage.getClaimOwner(worldName, chunkX, chunkZ);
     }
 
     /**
@@ -61,24 +64,26 @@ public class HyTownAccess {
     /**
      * Gets the display name for a claimed chunk.
      * Returns the town name if this chunk belongs to a town, otherwise the player name.
+     * Checks BOTH town claims and personal claims.
      */
     public static String getOwnerName(String worldName, int chunkX, int chunkZ) {
+        // Check if this chunk belongs to a town FIRST (town claims take priority)
+        if (townStorage != null) {
+            String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+            Town town = townStorage.getTownByClaimKey(claimKey);
+            if (town != null) {
+                // Return the town name
+                return town.getName();
+            }
+        }
+
+        // Not a town claim, check personal claims
         UUID owner = getClaimOwner(worldName, chunkX, chunkZ);
         if (owner == null) {
             return null;
         }
 
-        // Check if this chunk belongs to a town
-        if (townStorage != null) {
-            String claimKey = worldName + ":" + chunkX + "," + chunkZ;
-            Town town = townStorage.getTownByClaimKey(claimKey);
-            if (town != null) {
-                // Return the town name instead of the player name
-                return town.getName();
-            }
-        }
-
-        // Not a town claim, return the player name
+        // Return the player name for personal claims
         return getPlayerName(owner);
     }
 

@@ -2,6 +2,7 @@ package com.hytown.gui;
 
 import com.hytown.HyTown;
 import com.hytown.config.PluginConfig;
+import com.hytown.data.Town;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -32,6 +33,7 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
     private final World world;
 
     private String inputValue = "";
+    private String targetTownName = "";
     private String statusMessage = "";
     private boolean statusIsError = false;
     private String currentTab = "economy"; // economy, upkeep, wild, ranks
@@ -68,6 +70,10 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
             this.inputValue = data.inputValue;
             textOnly = true;
         }
+        if (data.targetTownName != null) {
+            this.targetTownName = data.targetTownName;
+            textOnly = true;
+        }
 
         // If only text changed, don't rebuild
         if (textOnly && data.action == null && data.tab == null) {
@@ -86,6 +92,12 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
         if (data.action != null) {
             handleAction(data.action, playerRef);
         }
+
+        // Rebuild and send update
+        UICommandBuilder commandBuilder = new UICommandBuilder();
+        UIEventBuilder eventBuilder = new UIEventBuilder();
+        this.build(ref, commandBuilder, eventBuilder, store);
+        this.sendUpdate(commandBuilder, eventBuilder, true);
     }
 
     private void handleAction(String action, PlayerRef playerRef) {
@@ -261,6 +273,67 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
                 statusMessage = "Backup created!";
                 statusIsError = false;
             }
+            case "give_plots" -> {
+                if (targetTownName == null || targetTownName.isEmpty()) {
+                    statusMessage = "Enter town name!";
+                    statusIsError = true;
+                } else {
+                    Town town = plugin.getTownStorage().getTown(targetTownName);
+                    if (town == null) {
+                        statusMessage = "Town not found!";
+                        statusIsError = true;
+                    } else {
+                        try {
+                            int amount = Integer.parseInt(inputValue);
+                            if (amount <= 0) {
+                                statusMessage = "Amount must be positive!";
+                                statusIsError = true;
+                            } else {
+                                town.addBonusClaims(amount);
+                                plugin.getTownStorage().saveTown(town);
+                                statusMessage = "Gave " + amount + " bonus plots to " + town.getName() + " (now has " + town.getBonusClaims() + " bonus)";
+                                statusIsError = false;
+                            }
+                        } catch (NumberFormatException e) {
+                            statusMessage = "Invalid amount!";
+                            statusIsError = true;
+                        }
+                    }
+                }
+            }
+            case "take_plots" -> {
+                if (targetTownName == null || targetTownName.isEmpty()) {
+                    statusMessage = "Enter town name!";
+                    statusIsError = true;
+                } else {
+                    Town town = plugin.getTownStorage().getTown(targetTownName);
+                    if (town == null) {
+                        statusMessage = "Town not found!";
+                        statusIsError = true;
+                    } else {
+                        try {
+                            int amount = Integer.parseInt(inputValue);
+                            if (amount <= 0) {
+                                statusMessage = "Amount must be positive!";
+                                statusIsError = true;
+                            } else {
+                                town.addBonusClaims(-amount);
+                                plugin.getTownStorage().saveTown(town);
+                                statusMessage = "Took " + amount + " bonus plots from " + town.getName() + " (now has " + town.getBonusClaims() + " bonus)";
+                                statusIsError = false;
+                            }
+                        } catch (NumberFormatException e) {
+                            statusMessage = "Invalid amount!";
+                            statusIsError = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Save config after any setting change
+        if (!statusIsError && !action.equals("reload") && !action.equals("save_all") && !action.equals("backup")) {
+            config.save();
         }
 
         inputValue = "";
@@ -277,8 +350,7 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
         cmd.set("#StatusMessage.Text", statusMessage);
         cmd.set("#StatusMessage.Style.TextColor", statusIsError ? "#ff5555" : "#55ff55");
 
-        // Title
-        cmd.set("#Title.Text", "HyTown Admin Panel");
+        // Title is already set in the .ui file, don't override it
 
         // Tab buttons
         evt.addEventBinding(CustomUIEventBindingType.Activating, "#EconomyTab",
@@ -292,12 +364,7 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
         evt.addEventBinding(CustomUIEventBindingType.Activating, "#DataTab",
                 EventData.of("Tab", "data"), false);
 
-        // Highlight current tab
-        cmd.set("#EconomyTab.Style.BackgroundColor", currentTab.equals("economy") ? "#555555" : "#333333");
-        cmd.set("#UpkeepTab.Style.BackgroundColor", currentTab.equals("upkeep") ? "#555555" : "#333333");
-        cmd.set("#WildTab.Style.BackgroundColor", currentTab.equals("wild") ? "#555555" : "#333333");
-        cmd.set("#PersonalTab.Style.BackgroundColor", currentTab.equals("personal") ? "#555555" : "#333333");
-        cmd.set("#DataTab.Style.BackgroundColor", currentTab.equals("data") ? "#555555" : "#333333");
+        // Tab highlighting not supported on TextButton - panels are shown/hidden instead
 
         // Input field
         cmd.set("#InputField.Value", inputValue);
@@ -395,6 +462,27 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
                 EventData.of("Action", "save_all"), false);
         evt.addEventBinding(CustomUIEventBindingType.Activating, "#BackupBtn",
                 EventData.of("Action", "backup"), false);
+
+        // Give/Take plots section
+        cmd.set("#TargetTownField.Value", targetTownName);
+        evt.addEventBinding(CustomUIEventBindingType.ValueChanged, "#TargetTownField",
+                EventData.of("@TargetTownName", "#TargetTownField.Value"), false);
+        evt.addEventBinding(CustomUIEventBindingType.Activating, "#GivePlotsBtn",
+                EventData.of("Action", "give_plots"), false);
+        evt.addEventBinding(CustomUIEventBindingType.Activating, "#TakePlotsBtn",
+                EventData.of("Action", "take_plots"), false);
+
+        // Show current bonus plots for target town
+        if (targetTownName != null && !targetTownName.isEmpty()) {
+            Town targetTown = plugin.getTownStorage().getTown(targetTownName);
+            if (targetTown != null) {
+                cmd.set("#TargetTownBonusValue.Text", String.valueOf(targetTown.getBonusClaims()));
+            } else {
+                cmd.set("#TargetTownBonusValue.Text", "N/A");
+            }
+        } else {
+            cmd.set("#TargetTownBonusValue.Text", "0");
+        }
     }
 
     /**
@@ -417,6 +505,7 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
         public String tab;
         public String action;
         public String inputValue;
+        public String targetTownName;
 
         public static final BuilderCodec<AdminData> CODEC = BuilderCodec.<AdminData>builder(AdminData.class, AdminData::new)
                 .addField(new KeyedCodec<>("Close", Codec.STRING),
@@ -431,6 +520,9 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
                 .addField(new KeyedCodec<>("@InputValue", Codec.STRING),
                         (data, s) -> data.inputValue = s,
                         data -> data.inputValue)
+                .addField(new KeyedCodec<>("@TargetTownName", Codec.STRING),
+                        (data, s) -> data.targetTownName = s,
+                        data -> data.targetTownName)
                 .build();
     }
 }

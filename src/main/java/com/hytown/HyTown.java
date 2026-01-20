@@ -1,6 +1,7 @@
 package com.hytown;
 
-import com.hytown.commands.ClaimCommand;
+import com.hytown.api.HyTownAPI;
+import com.hytown.events.TownEventBus;
 import com.hytown.commands.TownCommand;
 import com.hytown.commands.ResidentCommand;
 import com.hytown.commands.PlotCommand;
@@ -13,6 +14,7 @@ import com.hytown.config.PluginConfig;
 import com.hytown.config.WildernessHarvestConfig;
 import com.hytown.data.ClaimStorage;
 import com.hytown.data.PlaytimeStorage;
+import com.hytown.data.Town;
 import com.hytown.data.TownStorage;
 import com.hytown.listeners.ClaimProtectionListener;
 import com.hytown.managers.ClaimManager;
@@ -41,6 +43,7 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.*;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
@@ -74,6 +77,8 @@ public class HyTown extends JavaPlugin {
     private ClaimMapOverlayProvider mapOverlayProvider;
     private ClaimTitleSystem claimTitleSystem;
     private com.hytown.managers.UpkeepManager upkeepManager;
+    private HyTownAPI api;
+    private TownEventBus eventBus;
 
     // Teleport countdown system
     private final ScheduledExecutorService teleportScheduler = Executors.newScheduledThreadPool(2);
@@ -112,10 +117,15 @@ public class HyTown extends JavaPlugin {
         playtimeManager = new PlaytimeManager(playtimeStorage, config);
         upkeepManager = new com.hytown.managers.UpkeepManager(config, townStorage, getLogger());
 
-        // Register the personal claim command (/claim)
-        getCommandRegistry().registerCommand(new ClaimCommand(this));
+        // Initialize the event bus for other plugins to listen to town events
+        eventBus = new TownEventBus();
+        getLogger().atInfo().log("HyTown EventBus initialized - other plugins can register event listeners");
 
-        // Register Towny-style commands
+        // Initialize the public API for other plugins
+        api = new HyTownAPI(claimStorage, townStorage, claimManager);
+        getLogger().atInfo().log("HyTown API initialized - other plugins can now access town data");
+
+        // Register Towny-style commands (/town with /t and /claim aliases)
         getCommandRegistry().registerCommand(new TownCommand(this));
         getCommandRegistry().registerCommand(new ResidentCommand(this));
         getCommandRegistry().registerCommand(new PlotCommand(this));
@@ -147,13 +157,13 @@ public class HyTown extends JavaPlugin {
         getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemove);
 
         // Initialize map overlay provider (for markers, kept for compatibility)
-        mapOverlayProvider = new ClaimMapOverlayProvider(claimStorage, getLogger());
+        mapOverlayProvider = new ClaimMapOverlayProvider(claimStorage, townStorage, getLogger());
 
         // Register ECS block protection systems
         getLogger().atSevere().log("[DEBUG] Registering ECS block protection systems...");
         try {
             getLogger().atSevere().log("[DEBUG] Registering BlockDamageProtectionSystem...");
-            getEntityStoreRegistry().registerSystem(new BlockDamageProtectionSystem(claimManager, getLogger()));
+            getEntityStoreRegistry().registerSystem(new BlockDamageProtectionSystem(claimManager, townStorage, getLogger()));
             getLogger().atSevere().log("[DEBUG] Registering WildernessHarvestSystem (must run before BlockBreakProtectionSystem)...");
             getEntityStoreRegistry().registerSystem(new WildernessHarvestSystem(claimManager, config, wildernessHarvestConfig, getLogger()));
             getLogger().atSevere().log("[DEBUG] Registering BlockBreakProtectionSystem...");
@@ -422,6 +432,39 @@ public class HyTown extends JavaPlugin {
         return config;
     }
 
+    /**
+     * Gets the event bus for other plugins to listen to town events.
+     * Available events:
+     * - TownCreateEvent: When a town is created
+     * - TownDeleteEvent: When a town is deleted
+     * - TownRenameEvent: When a town is renamed
+     * - TownJoinEvent: When a player joins a town
+     * - TownLeaveEvent: When a player leaves a town
+     * - TownClaimEvent: When a chunk is claimed
+     * - TownUnclaimEvent: When a chunk is unclaimed
+     * - TownMayorChangeEvent: When the mayor changes
+     *
+     * @return The TownEventBus instance
+     */
+    public TownEventBus getEventBus() {
+        return eventBus;
+    }
+
+    /**
+     * Gets the public API for other plugins to use.
+     * The API provides methods to query town and claim information such as:
+     * - Whether a location is in wilderness, a town, or a personal claim
+     * - PvP and other settings at a location
+     * - Player membership and ranks within towns
+     * - Build/destroy permissions at locations
+     * - Town listings and discovery
+     *
+     * @return The HyTownAPI instance
+     */
+    public HyTownAPI getAPI() {
+        return api;
+    }
+
     public ClaimManager getClaimManager() {
         return claimManager;
     }
@@ -678,5 +721,119 @@ public class HyTown extends JavaPlugin {
     private void cancelCountdown(String playerName) {
         ScheduledFuture<?> task = activeCountdowns.remove(playerName);
         if (task != null) task.cancel(false);
+    }
+
+    // ==================== TOWN CREATION (shared by command and GUI) ====================
+
+    /**
+     * Result of a town creation attempt.
+     */
+    public record TownCreationResult(boolean success, String message, Town town) {
+        public static TownCreationResult error(String message) {
+            return new TownCreationResult(false, message, null);
+        }
+        public static TownCreationResult success(String message, Town town) {
+            return new TownCreationResult(true, message, town);
+        }
+    }
+
+    /**
+     * Creates a new town with the given name, claiming the chunk at the player's position.
+     * This method is used by both the command and GUI to ensure consistent behavior.
+     *
+     * @param townName     The name for the new town
+     * @param playerId     The UUID of the player creating the town
+     * @param playerName   The name of the player creating the town
+     * @param worldName    The world name
+     * @param blockX       The X block coordinate (for chunk calculation)
+     * @param blockZ       The Z block coordinate (for chunk calculation)
+     * @param chargeCost   Whether to charge the creation cost
+     * @return TownCreationResult indicating success or failure
+     */
+    public TownCreationResult createTown(String townName, UUID playerId, String playerName,
+                                          String worldName, double blockX, double blockZ, boolean chargeCost) {
+        // Validate name
+        if (townName == null || townName.isEmpty()) {
+            return TownCreationResult.error("Town name is required!");
+        }
+        if (townName.length() < 3 || townName.length() > 24) {
+            return TownCreationResult.error("Town name must be 3-24 characters!");
+        }
+        if (!townName.matches("^[a-zA-Z0-9_-]+$")) {
+            return TownCreationResult.error("Town name can only contain letters, numbers, _ and -");
+        }
+
+        // Check if player already in a town
+        Town existingTown = townStorage.getPlayerTown(playerId);
+        if (existingTown != null) {
+            return TownCreationResult.error("You are already in town: " + existingTown.getName());
+        }
+
+        // Check if town name exists
+        if (townStorage.townExists(townName)) {
+            return TownCreationResult.error("A town with that name already exists!");
+        }
+
+        // Calculate chunk
+        int chunkX = com.hytown.util.ChunkUtil.toChunkX(blockX);
+        int chunkZ = com.hytown.util.ChunkUtil.toChunkZ(blockZ);
+        String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+        // Check if chunk is available
+        Town existingClaimTown = townStorage.getTownByClaimKey(claimKey);
+        if (existingClaimTown != null) {
+            return TownCreationResult.error("Chunk is claimed by: " + existingClaimTown.getName());
+        }
+
+        UUID existingOwner = claimManager.getOwnerAt(worldName, blockX, blockZ);
+        if (existingOwner != null && !existingOwner.equals(playerId)) {
+            return TownCreationResult.error("Chunk is already claimed!");
+        }
+
+        // Handle cost
+        double cost = chargeCost ? config.getTownCreationCost() : 0;
+        if (cost > 0) {
+            if (!com.hycrown.hyconomy.HyConomy.has(playerName, cost)) {
+                return TownCreationResult.error("You need " + com.hycrown.hyconomy.HyConomy.format(cost) + " to create a town!");
+            }
+            if (!com.hycrown.hyconomy.HyConomy.withdraw(playerName, cost)) {
+                return TownCreationResult.error("Failed to withdraw funds!");
+            }
+        }
+
+        // Claim the chunk
+        ClaimManager.ClaimResult claimResult = claimManager.claimChunk(playerId, worldName, blockX, blockZ);
+        if (claimResult != ClaimManager.ClaimResult.SUCCESS) {
+            // Refund if claim failed
+            if (cost > 0) {
+                com.hycrown.hyconomy.HyConomy.deposit(playerName, cost);
+            }
+            String reason = switch (claimResult) {
+                case ALREADY_OWN -> "You already own this chunk personally";
+                case CLAIMED_BY_OTHER -> "Chunk is claimed by someone else";
+                case LIMIT_REACHED -> "Claim limit reached";
+                case TOO_CLOSE_TO_OTHER_CLAIM -> "Too close to another claim";
+                default -> "Unknown error";
+            };
+            return TownCreationResult.error("Failed to claim chunk: " + reason);
+        }
+
+        // Create the town
+        Town town = new Town(townName, playerId, playerName);
+        town.addClaim(claimKey);
+        townStorage.saveTown(town);
+        townStorage.indexPlayer(playerId, town.getName());
+
+        // Fire event
+        eventBus.fire(new com.hytown.events.TownCreateEvent(town, playerId, playerName, claimKey));
+
+        // Refresh map
+        refreshWorldMapChunk(worldName, chunkX, chunkZ);
+
+        String successMsg = "Town '" + townName + "' created!";
+        if (cost > 0) {
+            successMsg += " (Cost: " + com.hycrown.hyconomy.HyConomy.format(cost) + ")";
+        }
+        return TownCreationResult.success(successMsg, town);
     }
 }

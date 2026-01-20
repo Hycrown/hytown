@@ -3,6 +3,7 @@ package com.hytown.data;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.hycrown.hyconomy.HyConomy;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -63,9 +64,6 @@ public class TownStorage {
         }
 
         loadAll();
-
-        // Log loaded towns
-        System.out.println("[TownStorage] Loaded " + townsByName.size() + " towns");
     }
 
     // ==================== LOADING ====================
@@ -108,9 +106,8 @@ public class TownStorage {
                     .forEach(p -> {
                         try {
                             Files.deleteIfExists(p);
-                            System.out.println("[TownStorage] Cleaned up temp file: " + p.getFileName());
                         } catch (IOException e) {
-                            System.err.println("[TownStorage] Could not clean up temp file: " + p);
+                            // Ignore
                         }
                     });
         } catch (IOException e) {
@@ -126,22 +123,18 @@ public class TownStorage {
             stream.filter(p -> p.toString().endsWith(".bak"))
                     .forEach(backupFile -> {
                         String townName = backupFile.getFileName().toString().replace(".json.bak", "");
-                        // Only try to recover if we don't already have this town loaded
                         if (!townsByName.containsKey(townName.toLowerCase())) {
-                            System.out.println("[TownStorage] Attempting to recover " + townName + " from backup...");
                             try {
                                 String json = Files.readString(backupFile);
                                 Town town = gson.fromJson(json, Town.class);
                                 if (town != null && town.getName() != null) {
                                     town.validateAfterLoad();
                                     cacheTown(town);
-                                    // Restore the backup as the main file
                                     Path mainFile = townsDirectory.resolve(sanitize(town.getName()) + ".json");
                                     Files.copy(backupFile, mainFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                                    System.out.println("[TownStorage] RECOVERED town from backup: " + town.getName());
                                 }
                             } catch (Exception e) {
-                                System.err.println("[TownStorage] Failed to recover " + townName + " from backup: " + e.getMessage());
+                                // Failed to recover from backup
                             }
                         }
                     });
@@ -163,17 +156,12 @@ public class TownStorage {
 
             Town town = gson.fromJson(json, Town.class);
             if (town != null && town.getName() != null) {
-                // Validate and fix any data inconsistencies
                 town.validateAfterLoad();
                 cacheTown(town);
-                System.out.println("[TownStorage] Loaded town: " + town.getName() +
-                        " (residents=" + town.getResidentCount() + ", claims=" + town.getClaimCount() + ")");
             } else {
-                System.err.println("[TownStorage] Invalid town data in file: " + file);
                 moveToCorrupted(file, "invalid_data");
             }
         } catch (com.google.gson.JsonSyntaxException e) {
-            System.err.println("[TownStorage] Corrupted JSON in " + file + ": " + e.getMessage());
             moveToCorrupted(file, "json_syntax_error");
         } catch (Exception e) {
             System.err.println("[TownStorage] Failed to load town from " + file + ": " + e.getMessage());
@@ -223,8 +211,11 @@ public class TownStorage {
         townsByName.put(nameLower, town);
 
         // Index all claims
-        for (String claimKey : town.getClaimKeys()) {
-            claimToTown.put(claimKey, town.getName());
+        Set<String> claims = town.getClaimKeys();
+        if (claims != null) {
+            for (String claimKey : claims) {
+                claimToTown.put(claimKey, town.getName());
+            }
         }
 
         // Index all residents
@@ -302,9 +293,19 @@ public class TownStorage {
             }
         }
 
-        // Re-cache to update indexes (outside the lock to avoid deadlock)
-        uncacheTown(town.getName());
-        cacheTown(town);
+        // Update townsByName cache without touching player/claim indexes
+        // Player/claim indexes are managed explicitly via indexPlayer/unindexPlayer/indexClaim/unindexClaim
+        // This prevents race conditions where a leaving player could be re-indexed
+        String nameLower = town.getName().toLowerCase();
+        townsByName.put(nameLower, town);
+
+        // Update claim indexes (claims don't have the same leave/join race condition issues)
+        // First remove old claim mappings for this town
+        claimToTown.entrySet().removeIf(entry -> entry.getValue().equalsIgnoreCase(town.getName()));
+        // Then add current claims
+        for (String claimKey : town.getClaimKeys()) {
+            claimToTown.put(claimKey, town.getName());
+        }
     }
 
     /**
@@ -335,24 +336,14 @@ public class TownStorage {
      * Save all towns to disk.
      */
     public void saveAll() {
-        System.out.println("[TownStorage] Saving all " + townsByName.size() + " towns...");
-        int saved = 0;
-        int errors = 0;
         for (Town town : townsByName.values()) {
             try {
                 saveTown(town);
-                saved++;
             } catch (Exception e) {
-                errors++;
-                System.err.println("[TownStorage] ERROR saving " + town.getName() + ": " + e.getMessage());
+                // Error saving town
             }
         }
         saveIndex();
-        if (errors > 0) {
-            System.err.println("[TownStorage] Saved " + saved + " towns with " + errors + " errors!");
-        } else {
-            System.out.println("[TownStorage] Saved " + saved + " towns and index file successfully");
-        }
     }
 
     /**
@@ -360,9 +351,7 @@ public class TownStorage {
      * Warning: This will discard any unsaved in-memory changes!
      */
     public void reload() {
-        System.out.println("[TownStorage] Reloading all towns from disk...");
         loadAll();
-        System.out.println("[TownStorage] Reload complete. Loaded " + townsByName.size() + " towns.");
     }
 
     /**
@@ -391,20 +380,139 @@ public class TownStorage {
 
     /**
      * Delete a town.
+     * Refunds town balance to the mayor before deletion.
      */
     public void deleteTown(String townName) {
         Town town = getTown(townName);
         if (town == null) return;
 
-        // Remove from caches
-        uncacheTown(townName);
+        // Refund town balance to mayor
+        double balance = town.getBalance();
+        String mayorName = town.getMayorName();
+        if (balance > 0 && mayorName != null && !mayorName.isEmpty()) {
+            HyConomy.deposit(mayorName, balance);
+        }
+
+        // Explicitly unindex all players FIRST (most important for preventing "already in town" bugs)
+        Set<UUID> allResidents = town.getResidents();
+        for (UUID residentId : allResidents) {
+            playerToTown.remove(residentId);
+        }
+        // Also unindex the mayor explicitly (in case they're not in residents set for some reason)
+        if (town.getMayorId() != null) {
+            playerToTown.remove(town.getMayorId());
+        }
+
+        // Remove claim indexes
+        for (String claimKey : town.getClaimKeys()) {
+            claimToTown.remove(claimKey);
+        }
+
+        // Remove from town name cache
+        townsByName.remove(townName.toLowerCase());
 
         // Delete file
         Path file = townsDirectory.resolve(sanitize(townName) + ".json");
         try {
             Files.deleteIfExists(file);
         } catch (IOException e) {
-            e.printStackTrace();
+            // Ignore
+        }
+
+        // Also delete backup file
+        Path backupFile = townsDirectory.resolve(sanitize(townName) + ".json.bak");
+        try {
+            Files.deleteIfExists(backupFile);
+        } catch (IOException e) {
+            // Ignore backup deletion failure
+        }
+    }
+
+    // ==================== RENAME ====================
+
+    /**
+     * Rename a town.
+     * This properly handles all cascade updates:
+     * - Renames the JSON file
+     * - Updates all cache indexes (claims, players)
+     * - Updates pending invites referencing the old name
+     *
+     * @param oldName The current town name
+     * @param newName The new town name
+     * @return true if successful, false if failed (e.g., new name already exists)
+     */
+    public boolean renameTown(String oldName, String newName) {
+        synchronized (writeLock) {
+            Town town = getTown(oldName);
+            if (town == null) {
+                System.err.println("[TownStorage] Cannot rename - town not found: " + oldName);
+                return false;
+            }
+
+            // Check if new name already exists
+            if (townExists(newName) && !oldName.equalsIgnoreCase(newName)) {
+                System.err.println("[TownStorage] Cannot rename - name already taken: " + newName);
+                return false;
+            }
+
+            String oldNameLower = oldName.toLowerCase();
+            String newNameLower = newName.toLowerCase();
+
+            // Step 1: Remove from old cache entries
+            townsByName.remove(oldNameLower);
+
+            // Step 2: Update the town object
+            town.setName(newName);
+
+            // Step 3: Update claim index to point to new name
+            for (String claimKey : town.getClaimKeys()) {
+                claimToTown.put(claimKey, newName);
+            }
+
+            // Step 4: Update player index to point to new name
+            for (UUID residentId : town.getResidents()) {
+                playerToTown.put(residentId, newName);
+            }
+
+            // Step 5: Update pending invites - change old town name to new name
+            for (Map.Entry<UUID, Set<String>> entry : pendingInvites.entrySet()) {
+                Set<String> invites = entry.getValue();
+                if (invites.remove(oldName)) {
+                    invites.add(newName);
+                }
+                // Also check case-insensitive
+                invites.removeIf(inv -> inv.equalsIgnoreCase(oldName));
+                if (invites.stream().noneMatch(inv -> inv.equalsIgnoreCase(newName))) {
+                    // Only add if we removed it
+                }
+            }
+
+            // Step 6: Re-add to cache with new name
+            townsByName.put(newNameLower, town);
+
+            // Step 7: Delete old file
+            Path oldFile = townsDirectory.resolve(sanitize(oldName) + ".json");
+            try {
+                Files.deleteIfExists(oldFile);
+            } catch (IOException e) {
+                System.err.println("[TownStorage] Warning: Could not delete old file: " + oldFile);
+            }
+
+            // Step 8: Also delete old backup file
+            Path oldBackupFile = townsDirectory.resolve(sanitize(oldName) + ".json.bak");
+            try {
+                Files.deleteIfExists(oldBackupFile);
+            } catch (IOException e) {
+                // Ignore backup deletion failure
+            }
+
+            // Step 9: Save with new name
+            saveTown(town);
+
+            // Step 10: Save index (for invite updates)
+            saveIndex();
+
+            return true;
         }
     }
 
@@ -468,6 +576,10 @@ public class TownStorage {
      */
     public int getTownCount() {
         return townsByName.size();
+    }
+
+    public int getClaimIndexSize() {
+        return claimToTown.size();
     }
 
     // ==================== INVITES ====================
@@ -644,14 +756,11 @@ public class TownStorage {
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
 
-            System.out.println("[TownStorage] Created backup: " + today);
-
             // Clean up old backups (keep last MAX_BACKUPS)
             cleanOldBackups(backupDir);
 
         } catch (IOException e) {
-            System.err.println("[TownStorage] Failed to create backup: " + e.getMessage());
-            e.printStackTrace();
+            // Backup failed
         }
     }
 
@@ -669,10 +778,9 @@ public class TownStorage {
             for (int i = MAX_BACKUPS; i < backups.size(); i++) {
                 Path oldBackup = backups.get(i);
                 deleteDirectory(oldBackup);
-                System.out.println("[TownStorage] Deleted old backup: " + oldBackup.getFileName());
             }
         } catch (IOException e) {
-            System.err.println("[TownStorage] Failed to clean old backups: " + e.getMessage());
+            // Ignore
         }
     }
 
@@ -713,13 +821,103 @@ public class TownStorage {
     }
 
     /**
+     * Restore a single town from its .bak file.
+     * Returns true if successful.
+     */
+    public boolean restoreTownFromBackup(String townName) {
+        String sanitizedName = sanitize(townName);
+        Path backupFile = townsDirectory.resolve(sanitizedName + ".json.bak");
+
+        if (!Files.exists(backupFile)) {
+            System.err.println("[TownStorage] No backup file found for town: " + townName);
+            return false;
+        }
+
+        try {
+            String json = Files.readString(backupFile);
+            Town town = gson.fromJson(json, Town.class);
+
+            if (town == null || town.getName() == null) {
+                System.err.println("[TownStorage] Invalid backup data for town: " + townName);
+                return false;
+            }
+
+            // Validate after load
+            town.validateAfterLoad();
+
+            // Uncache old version if exists
+            uncacheTown(town.getName());
+
+            // Cache the restored town
+            cacheTown(town);
+
+            // Save to main file
+            Path mainFile = townsDirectory.resolve(sanitizedName + ".json");
+            Files.writeString(mainFile, json);
+
+            return true;
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Restore a single town from a daily backup (by date string like "2026-01-16").
+     * Returns true if successful.
+     */
+    public boolean restoreTownFromDailyBackup(String townName, String dateStr) {
+        String sanitizedName = sanitize(townName);
+        Path backupDir = townsDirectory.resolve("backups").resolve(dateStr);
+        Path backupFile = backupDir.resolve(sanitizedName + ".json");
+
+        if (!Files.exists(backupFile)) {
+            return false;
+        }
+
+        try {
+            String json = Files.readString(backupFile);
+            Town town = gson.fromJson(json, Town.class);
+
+            if (town == null || town.getName() == null) {
+                return false;
+            }
+
+            // Validate after load
+            town.validateAfterLoad();
+
+            // Uncache old version if exists
+            uncacheTown(town.getName());
+
+            // Cache the restored town
+            cacheTown(town);
+
+            // Save to main file
+            saveTown(town);
+
+            return true;
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if a town has a backup file available.
+     */
+    public boolean hasBackup(String townName) {
+        String sanitizedName = sanitize(townName);
+        Path backupFile = townsDirectory.resolve(sanitizedName + ".json.bak");
+        return Files.exists(backupFile);
+    }
+
+    /**
      * Restore from a backup (by date string like "2026-01-16").
      * Returns true if successful.
      */
     public boolean restoreBackup(String dateStr) {
         Path backupDir = townsDirectory.resolve("backups").resolve(dateStr);
         if (!Files.exists(backupDir)) {
-            System.err.println("[TownStorage] Backup not found: " + dateStr);
             return false;
         }
 
@@ -732,18 +930,16 @@ public class TownStorage {
                                 Path dest = townsDirectory.resolve(source.getFileName());
                                 Files.copy(source, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                             } catch (IOException e) {
-                                System.err.println("Failed to restore: " + source.getFileName());
+                                // Ignore individual file failures
                             }
                         });
             }
 
             // Reload all data
             loadAll();
-            System.out.println("[TownStorage] Restored from backup: " + dateStr);
             return true;
 
         } catch (IOException e) {
-            System.err.println("[TownStorage] Failed to restore backup: " + e.getMessage());
             return false;
         }
     }

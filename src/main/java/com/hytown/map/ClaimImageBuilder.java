@@ -286,11 +286,6 @@ public class ClaimImageBuilder {
         UUID claimOwner = HyTownAccess.getClaimOwner(worldName, chunkX, chunkZ);
         Color claimColor = claimOwner != null ? ClaimColorGenerator.getPlayerColor(claimOwner) : null;
 
-        // Debug logging (only for claimed chunks to reduce spam)
-        if (claimOwner != null) {
-            System.out.println("[ClaimMap] Rendering claimed chunk " + chunkX + "," + chunkZ + " in world " + worldName + " owner=" + claimOwner);
-        }
-
         // Get neighboring claim owners to determine borders
         UUID[] nearbyOwners = new UUID[]{
                 HyTownAccess.getClaimOwner(this.worldChunk.getWorld().getName(), chunkX, chunkZ + 1), // SOUTH

@@ -14,9 +14,14 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.DamageBlockEvent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hytown.data.Town;
+import com.hytown.data.TownStorage;
 import com.hytown.data.TrustLevel;
 import com.hytown.managers.ClaimManager;
+import com.hytown.util.ChunkUtil;
 import com.hytown.util.Messages;
+import com.hypixel.hytale.server.core.Message;
+import java.awt.Color;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -33,15 +38,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BlockDamageProtectionSystem extends EntityEventSystem<EntityStore, DamageBlockEvent> {
 
     private final ClaimManager claimManager;
+    private final TownStorage townStorage;
     private final HytaleLogger logger;
 
     // Rate limit messages - don't spam players
     private static final Map<UUID, Long> lastMessageTime = new ConcurrentHashMap<>();
     private static final long MESSAGE_COOLDOWN_MS = 2000; // 2 seconds
 
-    public BlockDamageProtectionSystem(ClaimManager claimManager, HytaleLogger logger) {
+    private static final Color RED = new Color(255, 85, 85);
+
+    public BlockDamageProtectionSystem(ClaimManager claimManager, TownStorage townStorage, HytaleLogger logger) {
         super(DamageBlockEvent.class);
         this.claimManager = claimManager;
+        this.townStorage = townStorage;
         this.logger = logger;
     }
 
@@ -85,12 +94,56 @@ public class BlockDamageProtectionSystem extends EntityEventSystem<EntityStore, 
         UUID playerId = playerRef.getUuid();
         String worldName = player.getWorld().getName();
 
-        // Damaging blocks requires DAMAGE trust level
-        if (!claimManager.hasPermissionAt(playerId, worldName, targetBlock.getX(), targetBlock.getZ(), TrustLevel.DAMAGE)) {
+        // Admin bypass - can damage blocks anywhere
+        if (player.hasPermission("hytown.admin")) {
+            return;
+        }
+
+        // Check chunk coordinates for claim lookups
+        int chunkX = ChunkUtil.toChunkX(targetBlock.getX());
+        int chunkZ = ChunkUtil.toChunkZ(targetBlock.getZ());
+        String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+        // Check if it's a town claim FIRST
+        Town town = townStorage != null ? townStorage.getTownByClaimKey(claimKey) : null;
+
+        if (town != null) {
+            // Town bypass permission
+            if (player.hasPermission("hytown.town.builder") || player.hasPermission("hytown.town.break.bypass")) {
+                return;
+            }
+            // Town claim - check if player is a member
+            if (town.isMember(playerId)) {
+                return; // Town members can damage blocks
+            }
+            // Check town settings for outsiders
+            if (town.getSettings().canOutsiderDestroy()) {
+                return;
+            }
+            // Not allowed
             event.setCancelled(true);
             if (canSendMessage(playerId)) {
-                player.sendMessage(Messages.cannotDamageHere());
+                player.sendMessage(Message.raw("You cannot damage blocks in " + town.getName()).color(RED));
+            }
+            return;
+        }
+
+        // Check if this chunk is a personal claim
+        UUID claimOwner = claimManager.getOwnerAt(worldName, targetBlock.getX(), targetBlock.getZ());
+
+        if (claimOwner != null) {
+            // Personal claim bypass permission
+            if (player.hasPermission("hytown.town.builder") || player.hasPermission("hytown.town.break.bypass")) {
+                return;
+            }
+            // Personal claim - check trust level
+            if (!claimManager.hasPermissionAt(playerId, worldName, targetBlock.getX(), targetBlock.getZ(), TrustLevel.DAMAGE)) {
+                event.setCancelled(true);
+                if (canSendMessage(playerId)) {
+                    player.sendMessage(Messages.cannotDamageHere());
+                }
             }
         }
+        // Unclaimed wilderness - allow damage
     }
 }

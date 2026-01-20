@@ -8,7 +8,10 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
+import com.hytown.HyTownAccess;
 import com.hytown.data.ClaimStorage;
+import com.hytown.data.Town;
+import com.hytown.data.TownStorage;
 import com.hytown.util.ChunkUtil;
 
 import java.util.ArrayList;
@@ -31,6 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
 
     private final ClaimStorage claimStorage;
+    private final TownStorage townStorage;
     private final HytaleLogger logger;
 
     // Track which chunks we've already sent overlays for per player
@@ -42,9 +46,17 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
     // Debug: only log once per player to avoid spam
     private final Map<UUID, Boolean> hasLoggedDebug = new ConcurrentHashMap<>();
 
-    public ClaimMapOverlayProvider(ClaimStorage claimStorage, HytaleLogger logger) {
+    public ClaimMapOverlayProvider(ClaimStorage claimStorage, TownStorage townStorage, HytaleLogger logger) {
         this.claimStorage = claimStorage;
+        this.townStorage = townStorage;
         this.logger = logger;
+    }
+
+    /**
+     * Legacy constructor for backwards compatibility.
+     */
+    public ClaimMapOverlayProvider(ClaimStorage claimStorage, HytaleLogger logger) {
+        this(claimStorage, null, logger);
     }
 
     @Override
@@ -67,8 +79,23 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
             int minChunkZ = playerChunkZ - VIEW_RADIUS;
             int maxChunkZ = playerChunkZ + VIEW_RADIUS;
 
-            // Get all claims in the visible area
-            Map<String, UUID> worldClaims = claimStorage.getClaimedChunksInWorld(worldName);
+            // Get all personal claims in the visible area
+            Map<String, UUID> worldClaims = new HashMap<>(claimStorage.getClaimedChunksInWorld(worldName));
+
+            // Also add town claims to the map
+            if (townStorage != null) {
+                for (Town town : townStorage.getAllTowns()) {
+                    for (String claimKey : town.getClaimKeys()) {
+                        // claimKey format is "worldName:chunkX,chunkZ"
+                        if (claimKey.startsWith(worldName + ":")) {
+                            // Extract chunk coordinates from the key
+                            String chunkPart = claimKey.substring(worldName.length() + 1);
+                            // Add town owner UUID for this claim
+                            worldClaims.put(chunkPart, town.getMayorId());
+                        }
+                    }
+                }
+            }
 
             // Debug logging (once per player)
             if (logger != null && !hasLoggedDebug.getOrDefault(playerId, false)) {
@@ -107,7 +134,6 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
             for (Map.Entry<UUID, List<int[]>> entry : ownerClaimChunks.entrySet()) {
                 UUID ownerId = entry.getKey();
                 List<int[]> chunks = entry.getValue();
-                String ownerName = claimStorage.getPlayerName(ownerId);
 
                 // Find center of this owner's visible claims
                 int sumX = 0, sumZ = 0;
@@ -118,6 +144,14 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
                 int centerChunkX = sumX / chunks.size();
                 int centerChunkZ = sumZ / chunks.size();
 
+                // Get the display name using HyTownAccess (handles both town and personal claims)
+                // Use one of the chunks to look up the proper name
+                int[] firstChunk = chunks.get(0);
+                String ownerName = HyTownAccess.getOwnerName(worldName, firstChunk[0], firstChunk[1]);
+                if (ownerName == null) {
+                    ownerName = claimStorage.getPlayerName(ownerId);
+                }
+
                 // Convert to block coordinates (center of chunk)
                 double markerX = (centerChunkX * 16) + 8;
                 double markerZ = (centerChunkZ * 16) + 8;
@@ -125,10 +159,21 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
                 // Create marker ID unique to this owner in this area
                 String markerId = "claim_" + ownerId.toString().substring(0, 8) + "_" + centerChunkX + "_" + centerChunkZ;
 
-                // Determine display name
-                String displayName = ownerName + "'s Claim";
-                if (ownerId.equals(playerId)) {
+                // Determine display name - check if it's a town or player's own claim
+                String displayName;
+                // Check if this is a town claim (ownerName won't contain "'s" for towns)
+                Town town = townStorage != null ? townStorage.getTownByClaimKey(worldName + ":" + firstChunk[0] + "," + firstChunk[1]) : null;
+                if (town != null) {
+                    // It's a town claim
+                    if (town.isMember(playerId)) {
+                        displayName = "Your Town: " + ownerName;
+                    } else {
+                        displayName = "Town: " + ownerName;
+                    }
+                } else if (ownerId.equals(playerId)) {
                     displayName = "Your Claim";
+                } else {
+                    displayName = ownerName + "'s Claim";
                 }
 
                 // Use the factory-based trySendMarker like built-in providers do
@@ -162,11 +207,27 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
             for (Map.Entry<UUID, List<int[]>> entry : ownerClaimChunks.entrySet()) {
                 UUID ownerId = entry.getKey();
                 List<int[]> chunks = entry.getValue();
-                String ownerName = claimStorage.getPlayerName(ownerId);
 
                 for (int[] chunk : chunks) {
                     int cx = chunk[0];
                     int cz = chunk[1];
+
+                    // Get the display name using HyTownAccess (handles both town and personal claims)
+                    String ownerName = HyTownAccess.getOwnerName(worldName, cx, cz);
+                    if (ownerName == null) {
+                        ownerName = claimStorage.getPlayerName(ownerId);
+                    }
+
+                    // Determine corner display name based on claim type
+                    String cornerDisplayName;
+                    Town town = townStorage != null ? townStorage.getTownByClaimKey(worldName + ":" + cx + "," + cz) : null;
+                    if (town != null) {
+                        cornerDisplayName = "Town: " + ownerName;
+                    } else if (ownerId.equals(playerId)) {
+                        cornerDisplayName = "Your Claim";
+                    } else {
+                        cornerDisplayName = ownerName + "'s Claim";
+                    }
 
                     // Create markers at all 4 corners of this chunk
                     // Chunk is 16 blocks, so corners are at (cx*16, cz*16) to (cx*16+15, cz*16+15)
@@ -184,7 +245,6 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
 
                     for (int i = 0; i < 4; i++) {
                         String cornerMarkerId = "claim_corner_" + cx + "_" + cz + "_" + cornerNames[i];
-                        String cornerDisplayName = ownerName + "'s Claim";
 
                         com.hypixel.hytale.math.vector.Vector3d cornerPos =
                             new com.hypixel.hytale.math.vector.Vector3d(corners[i][0], centerY, corners[i][1]);

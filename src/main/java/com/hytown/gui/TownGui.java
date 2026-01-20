@@ -169,45 +169,25 @@ public class TownGui extends InteractiveCustomUIPage<TownGui.TownData> {
                     statusIsError = true;
                     return;
                 }
-                if (town != null) {
-                    statusMessage = "You're already in a town!";
-                    statusIsError = true;
-                    return;
-                }
-                if (townStorage.townExists(townNameInput)) {
-                    statusMessage = "Town name already taken!";
-                    statusIsError = true;
-                    return;
-                }
-                if (townNameInput.length() < 3 || townNameInput.length() > 24) {
-                    statusMessage = "Name must be 3-24 characters!";
-                    statusIsError = true;
-                    return;
-                }
-                if (!townNameInput.matches("^[a-zA-Z0-9_-]+$")) {
-                    statusMessage = "Invalid characters in name!";
-                    statusIsError = true;
-                    return;
-                }
-                // Check balance
-                double cost = plugin.getPluginConfig().getTownCreationCost();
-                if (cost > 0 && !HyConomy.has(playerName, cost)) {
-                    statusMessage = "Need " + HyConomy.format(cost) + "!";
-                    statusIsError = true;
-                    return;
-                }
-                if (cost > 0 && !HyConomy.withdraw(playerName, cost)) {
-                    statusMessage = "Payment failed!";
-                    statusIsError = true;
-                    return;
-                }
 
-                Town newTown = new Town(townNameInput, playerId, playerName);
-                townStorage.saveTown(newTown);
-                statusMessage = "Town created!";
-                statusIsError = false;
-                townNameInput = "";
-                currentTab = "main";
+                // Get current position
+                TransformComponent transform = store.getComponent(ref, TransformComponent.getComponentType());
+                Vector3d pos = transform.getPosition();
+                String worldName = world.getName();
+
+                // Use shared creation method
+                HyTown.TownCreationResult result = plugin.createTown(
+                        townNameInput, playerId, playerName, worldName, pos.getX(), pos.getZ(), true);
+
+                if (result.success()) {
+                    statusMessage = "Town created!";
+                    statusIsError = false;
+                    townNameInput = "";
+                    currentTab = "main";
+                } else {
+                    statusMessage = result.message();
+                    statusIsError = true;
+                }
             }
 
             case "claim" -> {

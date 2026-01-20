@@ -112,17 +112,13 @@ public class ClaimSelectionManager {
      */
     private void sendSelectionPacket(PlayerRef playerRef, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         try {
-            System.out.println("[ClaimSelection] Sending selection packet: " +
-                minX + "," + minY + "," + minZ + " to " + maxX + "," + maxY + "," + maxZ);
             BuilderToolSelectionUpdate packet = new BuilderToolSelectionUpdate(
                 minX, minY, minZ,
                 maxX, maxY, maxZ
             );
             playerRef.getPacketHandler().write(packet);
-            System.out.println("[ClaimSelection] Packet sent successfully!");
         } catch (Exception e) {
-            System.out.println("[ClaimSelection] ERROR sending packet: " + e.getMessage());
-            e.printStackTrace();
+            // Silently ignore packet errors
         }
     }
 

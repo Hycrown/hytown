@@ -1,6 +1,6 @@
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\HyTown.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\HyTownAccess.java
-C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\commands\ClaimCommand.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\api\HyTownAPI.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\commands\PlotCommand.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\commands\ResidentCommand.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\commands\TownCommand.java
@@ -23,6 +23,15 @@ C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\Tow
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\TownTransaction.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\TrustedPlayer.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\TrustLevel.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownCreateEvent.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownDeleteEvent.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownRenameEvent.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownJoinEvent.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownLeaveEvent.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownClaimEvent.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownUnclaimEvent.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownMayorChangeEvent.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\events\TownEventBus.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\gui\ChunkVisualizerGui.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\gui\ClaimSettingsGui.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\gui\PlotGui.java
