@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.hycrown.hyconomy.HyConomy;
+import com.hytown.storage.StorageProvider;
+import com.hytown.storage.FlatfileStorage;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -16,11 +18,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Manages persistent storage of towns using JSON files.
+ * Manages persistent storage of towns with pluggable storage backends.
  * Maintains indexes for fast lookup by name, claim, and player.
  *
+ * Supports:
+ * - Flatfile (JSON) - default
+ * - MySQL
+ * - MongoDB
+ *
  * Robustness features:
- * - Atomic writes using temp files + rename
+ * - Atomic writes using temp files + rename (flatfile)
  * - Corrupted file recovery with backup
  * - Periodic auto-save
  * - Thread-safe operations
@@ -30,6 +37,10 @@ public class TownStorage {
     private final Path indexFile;
     private final Path corruptedDirectory;
     private final Gson gson;
+
+    // Storage providers
+    private StorageProvider loadProvider;
+    private StorageProvider saveProvider;
 
     // In-memory caches
     private final Map<String, Town> townsByName = new ConcurrentHashMap<>();           // townName (lowercase) -> Town
@@ -48,6 +59,16 @@ public class TownStorage {
     private volatile boolean dirty = false;
 
     public TownStorage(Path dataDirectory) {
+        this(dataDirectory, null, null);
+    }
+
+    /**
+     * Constructor with custom storage providers.
+     * @param dataDirectory Plugin data directory
+     * @param loadProvider Provider to load data from (null = flatfile)
+     * @param saveProvider Provider to save data to (null = flatfile)
+     */
+    public TownStorage(Path dataDirectory, StorageProvider loadProvider, StorageProvider saveProvider) {
         this.townsDirectory = dataDirectory.resolve("towns");
         this.indexFile = townsDirectory.resolve("_index.json");
         this.corruptedDirectory = townsDirectory.resolve("corrupted");
@@ -63,38 +84,91 @@ public class TownStorage {
             e.printStackTrace();
         }
 
+        // Set providers (default to FlatfileStorage if not provided)
+        FlatfileStorage flatfile = new FlatfileStorage(dataDirectory);
+        try {
+            flatfile.init();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        this.loadProvider = loadProvider != null ? loadProvider : flatfile;
+        this.saveProvider = saveProvider != null ? saveProvider : flatfile;
+
         loadAll();
+    }
+
+    /**
+     * Set the storage providers after construction (for late initialization).
+     */
+    public void setProviders(StorageProvider loadProvider, StorageProvider saveProvider) {
+        if (loadProvider != null) {
+            this.loadProvider = loadProvider;
+        }
+        if (saveProvider != null) {
+            this.saveProvider = saveProvider;
+        }
+    }
+
+    /**
+     * Get the current load provider.
+     */
+    public StorageProvider getLoadProvider() {
+        return loadProvider;
+    }
+
+    /**
+     * Get the current save provider.
+     */
+    public StorageProvider getSaveProvider() {
+        return saveProvider;
     }
 
     // ==================== LOADING ====================
 
     /**
-     * Load all towns from disk.
-     * Also tries to recover from .bak files if main files are corrupted.
+     * Load all towns from the configured storage provider.
+     * Also loads pending invites.
      */
     public void loadAll() {
         townsByName.clear();
         claimToTown.clear();
         playerToTown.clear();
 
-        // Clean up any leftover temp files from crashed saves
-        cleanupTempFiles();
+        // Load towns from provider
+        if (loadProvider != null) {
+            try {
+                Collection<Town> towns = loadProvider.loadAllTowns();
+                for (Town town : towns) {
+                    if (town != null && town.getName() != null) {
+                        cacheTown(town);
+                    }
+                }
+                System.out.println("[TownStorage] Loaded " + towns.size() + " towns from " + loadProvider.getName());
 
-        try (var stream = Files.list(townsDirectory)) {
-            stream.filter(p -> p.toString().endsWith(".json"))
-                    .filter(p -> !p.getFileName().toString().startsWith("_"))
-                    .filter(p -> !p.getFileName().toString().endsWith(".tmp"))
-                    .filter(p -> !p.getFileName().toString().endsWith(".bak"))
-                    .forEach(this::loadTownFile);
-        } catch (IOException e) {
-            e.printStackTrace();
+                // Load pending invites
+                Map<UUID, Set<String>> loadedInvites = loadProvider.loadInvites();
+                pendingInvites.clear();
+                pendingInvites.putAll(loadedInvites);
+            } catch (Exception e) {
+                System.err.println("[TownStorage] Error loading from " + loadProvider.getName() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        } else {
+            // Fallback to legacy file loading
+            cleanupTempFiles();
+            try (var stream = Files.list(townsDirectory)) {
+                stream.filter(p -> p.toString().endsWith(".json"))
+                        .filter(p -> !p.getFileName().toString().startsWith("_"))
+                        .filter(p -> !p.getFileName().toString().endsWith(".tmp"))
+                        .filter(p -> !p.getFileName().toString().endsWith(".bak"))
+                        .forEach(this::loadTownFile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            loadIndex();
+            recoverFromBackups();
         }
-
-        // Load pending invites from index
-        loadIndex();
-
-        // Try to recover any towns from backup files that weren't loaded
-        recoverFromBackups();
     }
 
     /**
@@ -227,107 +301,104 @@ public class TownStorage {
     // ==================== SAVING ====================
 
     /**
-     * Save a single town to disk using atomic write.
-     * Uses temp file + rename to prevent corruption on crash.
+     * Save a single town using the configured storage provider.
      */
     public void saveTown(Town town) {
-        synchronized (writeLock) {
-            Path file = townsDirectory.resolve(sanitize(town.getName()) + ".json");
-            Path tempFile = townsDirectory.resolve(sanitize(town.getName()) + ".json.tmp");
-
+        // Save to provider
+        if (saveProvider != null) {
             try {
-                // Serialize to JSON
-                String json = gson.toJson(town);
-
-                // Validate serialization worked (sanity check)
-                if (json == null || json.trim().isEmpty()) {
-                    System.err.println("[TownStorage] ERROR: Empty JSON generated for town: " + town.getName());
-                    return;
-                }
-
-                // Write to temp file first
-                Files.writeString(tempFile, json);
-
-                // Verify temp file was written correctly
-                String verification = Files.readString(tempFile);
-                if (!json.equals(verification)) {
-                    System.err.println("[TownStorage] ERROR: Verification failed for town: " + town.getName());
-                    Files.deleteIfExists(tempFile);
-                    return;
-                }
-
-                // Create backup of existing file before overwriting
-                if (Files.exists(file)) {
-                    Path backupFile = townsDirectory.resolve(sanitize(town.getName()) + ".json.bak");
-                    try {
-                        Files.copy(file, backupFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    } catch (IOException e) {
-                        // Backup failure is not critical, continue with save
-                        System.err.println("[TownStorage] Warning: Could not create backup for " + town.getName());
-                    }
-                }
-
-                // Atomic rename (this is atomic on most filesystems)
-                Files.move(tempFile, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-
+                saveProvider.saveTown(town);
                 dirty = false;
+            } catch (Exception e) {
+                System.err.println("[TownStorage] ERROR saving town " + town.getName() + " to " + saveProvider.getName() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        } else {
+            // Fallback to legacy file saving
+            synchronized (writeLock) {
+                Path file = townsDirectory.resolve(sanitize(town.getName()) + ".json");
+                Path tempFile = townsDirectory.resolve(sanitize(town.getName()) + ".json.tmp");
 
-            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-                // Fallback for filesystems that don't support atomic move
                 try {
                     String json = gson.toJson(town);
-                    Files.writeString(file, json);
-                    Files.deleteIfExists(tempFile);
-                } catch (IOException ex) {
-                    System.err.println("[TownStorage] ERROR saving town " + town.getName() + ": " + ex.getMessage());
-                    ex.printStackTrace();
+                    if (json == null || json.trim().isEmpty()) {
+                        System.err.println("[TownStorage] ERROR: Empty JSON generated for town: " + town.getName());
+                        return;
+                    }
+
+                    Files.writeString(tempFile, json);
+                    String verification = Files.readString(tempFile);
+                    if (!json.equals(verification)) {
+                        System.err.println("[TownStorage] ERROR: Verification failed for town: " + town.getName());
+                        Files.deleteIfExists(tempFile);
+                        return;
+                    }
+
+                    if (Files.exists(file)) {
+                        Path backupFile = townsDirectory.resolve(sanitize(town.getName()) + ".json.bak");
+                        try {
+                            Files.copy(file, backupFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        } catch (IOException e) {
+                            System.err.println("[TownStorage] Warning: Could not create backup for " + town.getName());
+                        }
+                    }
+
+                    Files.move(tempFile, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                            java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                    dirty = false;
+
+                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                    try {
+                        String json = gson.toJson(town);
+                        Files.writeString(file, json);
+                        Files.deleteIfExists(tempFile);
+                    } catch (IOException ex) {
+                        System.err.println("[TownStorage] ERROR saving town " + town.getName() + ": " + ex.getMessage());
+                    }
+                } catch (IOException e) {
+                    System.err.println("[TownStorage] ERROR saving town " + town.getName() + ": " + e.getMessage());
+                    try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
                 }
-            } catch (IOException e) {
-                System.err.println("[TownStorage] ERROR saving town " + town.getName() + ": " + e.getMessage());
-                e.printStackTrace();
-                // Try to clean up temp file
-                try {
-                    Files.deleteIfExists(tempFile);
-                } catch (IOException ignored) {}
             }
         }
 
-        // Update townsByName cache without touching player/claim indexes
-        // Player/claim indexes are managed explicitly via indexPlayer/unindexPlayer/indexClaim/unindexClaim
-        // This prevents race conditions where a leaving player could be re-indexed
+        // Update in-memory indexes
         String nameLower = town.getName().toLowerCase();
         townsByName.put(nameLower, town);
 
-        // Update claim indexes (claims don't have the same leave/join race condition issues)
-        // First remove old claim mappings for this town
+        // Update claim indexes
         claimToTown.entrySet().removeIf(entry -> entry.getValue().equalsIgnoreCase(town.getName()));
-        // Then add current claims
         for (String claimKey : town.getClaimKeys()) {
             claimToTown.put(claimKey, town.getName());
         }
     }
 
     /**
-     * Save the index file (invites, etc.) using atomic write.
+     * Save the index file (invites, etc.) using the configured provider.
      */
     public void saveIndex() {
-        synchronized (writeLock) {
-            Path tempFile = townsDirectory.resolve("_index.json.tmp");
-            Map<String, Set<String>> toSave = new HashMap<>();
-            for (Map.Entry<UUID, Set<String>> entry : pendingInvites.entrySet()) {
-                toSave.put(entry.getKey().toString(), entry.getValue());
-            }
+        if (saveProvider != null) {
             try {
-                String json = gson.toJson(toSave);
-                Files.writeString(tempFile, json);
-                Files.move(tempFile, indexFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e) {
-                System.err.println("[TownStorage] ERROR saving index: " + e.getMessage());
-                e.printStackTrace();
+                saveProvider.saveInvites(new HashMap<>(pendingInvites));
+            } catch (Exception e) {
+                System.err.println("[TownStorage] ERROR saving index to " + saveProvider.getName() + ": " + e.getMessage());
+            }
+        } else {
+            // Fallback to legacy file saving
+            synchronized (writeLock) {
+                Path tempFile = townsDirectory.resolve("_index.json.tmp");
+                Map<String, Set<String>> toSave = new HashMap<>();
+                for (Map.Entry<UUID, Set<String>> entry : pendingInvites.entrySet()) {
+                    toSave.put(entry.getKey().toString(), entry.getValue());
+                }
                 try {
-                    Files.deleteIfExists(tempFile);
-                } catch (IOException ignored) {}
+                    String json = gson.toJson(toSave);
+                    Files.writeString(tempFile, json);
+                    Files.move(tempFile, indexFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    System.err.println("[TownStorage] ERROR saving index: " + e.getMessage());
+                    try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+                }
             }
         }
     }
@@ -393,12 +464,11 @@ public class TownStorage {
             HyConomy.deposit(mayorName, balance);
         }
 
-        // Explicitly unindex all players FIRST (most important for preventing "already in town" bugs)
+        // Explicitly unindex all players FIRST
         Set<UUID> allResidents = town.getResidents();
         for (UUID residentId : allResidents) {
             playerToTown.remove(residentId);
         }
-        // Also unindex the mayor explicitly (in case they're not in residents set for some reason)
         if (town.getMayorId() != null) {
             playerToTown.remove(town.getMayorId());
         }
@@ -411,20 +481,23 @@ public class TownStorage {
         // Remove from town name cache
         townsByName.remove(townName.toLowerCase());
 
-        // Delete file
-        Path file = townsDirectory.resolve(sanitize(townName) + ".json");
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException e) {
-            // Ignore
-        }
-
-        // Also delete backup file
-        Path backupFile = townsDirectory.resolve(sanitize(townName) + ".json.bak");
-        try {
-            Files.deleteIfExists(backupFile);
-        } catch (IOException e) {
-            // Ignore backup deletion failure
+        // Delete from storage provider
+        if (saveProvider != null) {
+            try {
+                saveProvider.deleteTown(townName);
+            } catch (Exception e) {
+                System.err.println("[TownStorage] Error deleting town from " + saveProvider.getName() + ": " + e.getMessage());
+            }
+        } else {
+            // Fallback to legacy file deletion
+            Path file = townsDirectory.resolve(sanitize(townName) + ".json");
+            Path backupFile = townsDirectory.resolve(sanitize(townName) + ".json.bak");
+            try {
+                Files.deleteIfExists(file);
+                Files.deleteIfExists(backupFile);
+            } catch (IOException e) {
+                // Ignore
+            }
         }
     }
 
@@ -490,23 +563,26 @@ public class TownStorage {
             // Step 6: Re-add to cache with new name
             townsByName.put(newNameLower, town);
 
-            // Step 7: Delete old file
-            Path oldFile = townsDirectory.resolve(sanitize(oldName) + ".json");
-            try {
-                Files.deleteIfExists(oldFile);
-            } catch (IOException e) {
-                System.err.println("[TownStorage] Warning: Could not delete old file: " + oldFile);
+            // Step 7: Delete old entry from storage provider
+            if (saveProvider != null) {
+                try {
+                    saveProvider.deleteTown(oldName);
+                } catch (Exception e) {
+                    System.err.println("[TownStorage] Warning: Could not delete old town from storage: " + e.getMessage());
+                }
+            } else {
+                // Fallback to legacy file deletion
+                Path oldFile = townsDirectory.resolve(sanitize(oldName) + ".json");
+                Path oldBackupFile = townsDirectory.resolve(sanitize(oldName) + ".json.bak");
+                try {
+                    Files.deleteIfExists(oldFile);
+                    Files.deleteIfExists(oldBackupFile);
+                } catch (IOException e) {
+                    System.err.println("[TownStorage] Warning: Could not delete old file: " + e.getMessage());
+                }
             }
 
-            // Step 8: Also delete old backup file
-            Path oldBackupFile = townsDirectory.resolve(sanitize(oldName) + ".json.bak");
-            try {
-                Files.deleteIfExists(oldBackupFile);
-            } catch (IOException e) {
-                // Ignore backup deletion failure
-            }
-
-            // Step 9: Save with new name
+            // Step 8: Save with new name
             saveTown(town);
 
             // Step 10: Save index (for invite updates)

@@ -16,6 +16,11 @@ import com.hytown.data.ClaimStorage;
 import com.hytown.data.PlaytimeStorage;
 import com.hytown.data.Town;
 import com.hytown.data.TownStorage;
+import com.hytown.storage.StorageConfig;
+import com.hytown.storage.StorageProvider;
+import com.hytown.storage.FlatfileStorage;
+import com.hytown.storage.SQLStorage;
+import com.hytown.storage.MongoStorage;
 import com.hytown.listeners.ClaimProtectionListener;
 import com.hytown.managers.ClaimManager;
 import com.hytown.managers.PlaytimeManager;
@@ -107,7 +112,16 @@ public class HyTown extends JavaPlugin {
         // Initialize storage
         claimStorage = new ClaimStorage(getDataDirectory());
         playtimeStorage = new PlaytimeStorage(getDataDirectory());
-        townStorage = new TownStorage(getDataDirectory());
+
+        // Initialize town storage with configurable providers
+        StorageProvider loadProvider = createStorageProvider(config.getStorageConfig().getLoadFrom());
+        StorageProvider saveProvider = createStorageProvider(config.getStorageConfig().getSaveTo());
+        townStorage = new TownStorage(getDataDirectory(), loadProvider, saveProvider);
+
+        // Log storage configuration
+        getLogger().atInfo().log("Town storage: load from %s, save to %s",
+                loadProvider != null ? loadProvider.getName() : "flatfile",
+                saveProvider != null ? saveProvider.getName() : "flatfile");
 
         // Initialize static accessor for map system
         HyTownAccess.init(claimStorage, townStorage);
@@ -632,6 +646,85 @@ public class HyTown extends JavaPlugin {
      */
     public TownStorage getTownStorage() {
         return townStorage;
+    }
+
+    // ==================== STORAGE PROVIDER FACTORY ====================
+
+    /**
+     * Create a storage provider based on the type string.
+     * @param type "flatfile", "sql", or "mongodb"
+     * @return The storage provider, or null if type is unknown/flatfile (flatfile is default)
+     */
+    private StorageProvider createStorageProvider(String type) {
+        if (type == null) {
+            return null; // Will use default flatfile
+        }
+
+        StorageConfig storageConfig = config.getStorageConfig();
+
+        switch (type.toLowerCase()) {
+            case "sql":
+            case "mysql":
+                try {
+                    SQLStorage sqlStorage = new SQLStorage(storageConfig.getSql());
+                    sqlStorage.init();
+                    getLogger().atInfo().log("SQL storage provider initialized: %s",
+                            sqlStorage.getConnectionInfo());
+                    return sqlStorage;
+                } catch (Exception e) {
+                    getLogger().atSevere().log("Failed to initialize SQL storage: %s", e.getMessage());
+                    e.printStackTrace();
+                    return null;
+                }
+
+            case "mongodb":
+            case "mongo":
+                try {
+                    MongoStorage mongoStorage = new MongoStorage(storageConfig.getMongodb());
+                    mongoStorage.init();
+                    getLogger().atInfo().log("MongoDB storage provider initialized: %s",
+                            mongoStorage.getConnectionInfo());
+                    return mongoStorage;
+                } catch (Exception e) {
+                    getLogger().atSevere().log("Failed to initialize MongoDB storage: %s", e.getMessage());
+                    e.printStackTrace();
+                    return null;
+                }
+
+            case "flatfile":
+            case "json":
+            default:
+                // Return null to use default flatfile storage in TownStorage
+                return null;
+        }
+    }
+
+    /**
+     * Get the storage status for admin display.
+     */
+    public String getStorageStatus() {
+        StorageProvider load = townStorage.getLoadProvider();
+        StorageProvider save = townStorage.getSaveProvider();
+
+        String loadStatus = load != null ?
+                load.getName() + " (" + (load.isConnected() ? "connected" : "disconnected") + ")" :
+                "flatfile";
+        String saveStatus = save != null ?
+                save.getName() + " (" + (save.isConnected() ? "connected" : "disconnected") + ")" :
+                "flatfile";
+
+        return "Load: " + loadStatus + ", Save: " + saveStatus;
+    }
+
+    /**
+     * Force migrate all data to the save provider.
+     * Useful for admin commands to trigger immediate migration.
+     */
+    public void migrateStorage() {
+        getLogger().atInfo().log("Starting storage migration...");
+        townStorage.saveAll();
+        getLogger().atInfo().log("Storage migration complete - all data saved to %s",
+                townStorage.getSaveProvider() != null ? townStorage.getSaveProvider().getName() : "flatfile");
     }
 
     /**

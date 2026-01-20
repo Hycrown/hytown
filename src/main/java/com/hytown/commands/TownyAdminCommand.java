@@ -84,6 +84,7 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
             case "backup" -> handleBackupNow(playerData);
             case "player" -> handlePlayer(playerData, arg1, arg2);
             case "spawn" -> handleSpawn(store, playerRef, playerData, world, arg1);
+            case "storage" -> handleStorage(playerData, arg1);
             default -> showHelp(playerData);
         }
     }
@@ -438,6 +439,51 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("Backup created!").color(GREEN));
     }
 
+    private void handleStorage(PlayerRef playerData, String action) {
+        if (action == null || action.isEmpty()) {
+            // Show status
+            playerData.sendMessage(Message.raw("=== Storage Status ===").color(GOLD));
+            playerData.sendMessage(Message.raw(plugin.getStorageStatus()).color(WHITE));
+            playerData.sendMessage(Message.raw("").color(WHITE));
+            playerData.sendMessage(Message.raw("Commands:").color(GRAY));
+            playerData.sendMessage(Message.raw("  /townadmin storage status - Show current status").color(GRAY));
+            playerData.sendMessage(Message.raw("  /townadmin storage migrate - Force save all data to save provider").color(GRAY));
+            return;
+        }
+
+        switch (action.toLowerCase()) {
+            case "status" -> {
+                playerData.sendMessage(Message.raw("=== Storage Status ===").color(GOLD));
+                playerData.sendMessage(Message.raw(plugin.getStorageStatus()).color(WHITE));
+
+                // Show config values
+                var storageConfig = plugin.getPluginConfig().getStorageConfig();
+                playerData.sendMessage(Message.raw("").color(WHITE));
+                playerData.sendMessage(Message.raw("Config:").color(GRAY));
+                playerData.sendMessage(Message.raw("  loadFrom: " + storageConfig.getLoadFrom()).color(GRAY));
+                playerData.sendMessage(Message.raw("  saveTo: " + storageConfig.getSaveTo()).color(GRAY));
+
+                if (storageConfig.needsSQL()) {
+                    var sql = storageConfig.getSql();
+                    playerData.sendMessage(Message.raw("  SQL: " + sql.getHost() + ":" + sql.getPort() + "/" + sql.getDatabase()).color(GRAY));
+                }
+                if (storageConfig.needsMongoDB()) {
+                    var mongo = storageConfig.getMongodb();
+                    playerData.sendMessage(Message.raw("  MongoDB: " + mongo.getConnectionString() + " / " + mongo.getDatabase()).color(GRAY));
+                }
+            }
+            case "migrate" -> {
+                playerData.sendMessage(Message.raw("Starting storage migration...").color(YELLOW));
+                plugin.migrateStorage();
+                playerData.sendMessage(Message.raw("Migration complete! All data saved to configured save provider.").color(GREEN));
+            }
+            default -> {
+                playerData.sendMessage(Message.raw("Unknown storage command: " + action).color(RED));
+                playerData.sendMessage(Message.raw("Use: /townadmin storage [status|migrate]").color(GRAY));
+            }
+        }
+    }
+
     private void handlePlayer(PlayerRef playerData, String playerName, String action) {
         if (playerName == null || playerName.isEmpty()) {
             playerData.sendMessage(Message.raw("Usage: /townadmin player <name> [clear]").color(RED));
@@ -648,6 +694,15 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("  Check player's town index status").color(GRAY));
         playerData.sendMessage(Message.raw("/townadmin player <name> clear").color(WHITE));
         playerData.sendMessage(Message.raw("  Fix 'already in town' bug by clearing player's index").color(GRAY));
+
+        // Storage
+        playerData.sendMessage(Message.raw("--- Storage Backend ---").color(GOLD));
+        playerData.sendMessage(Message.raw("/townadmin storage").color(WHITE));
+        playerData.sendMessage(Message.raw("  Show current storage backend status").color(GRAY));
+        playerData.sendMessage(Message.raw("/townadmin storage status").color(WHITE));
+        playerData.sendMessage(Message.raw("  Detailed storage status and config").color(GRAY));
+        playerData.sendMessage(Message.raw("/townadmin storage migrate").color(WHITE));
+        playerData.sendMessage(Message.raw("  Force save all data to configured save backend").color(GRAY));
 
     }
 }

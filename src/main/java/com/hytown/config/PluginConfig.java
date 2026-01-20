@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.hytown.storage.StorageConfig;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -95,6 +96,15 @@ public class PluginConfig {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    // ===== STORAGE GETTERS =====
+
+    /**
+     * Get storage configuration for database backends.
+     */
+    public StorageConfig getStorageConfig() {
+        return config.storage != null ? config.storage : new StorageConfig();
     }
 
     // ===== GETTERS =====
@@ -317,6 +327,9 @@ public class PluginConfig {
      * Uses clear, user-friendly field names.
      */
     private static class ConfigData {
+        // Storage backend configuration
+        StorageConfig storage = new StorageConfig();
+
         // Personal claims settings
         int startingClaims = 4;
         int claimsPerHour = 2;

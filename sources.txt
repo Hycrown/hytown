@@ -62,3 +62,8 @@ C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\systems\
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\ui\TownyHelpPage.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\util\ChunkUtil.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\util\Messages.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\storage\StorageProvider.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\storage\StorageConfig.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\storage\FlatfileStorage.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\storage\SQLStorage.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\storage\MongoStorage.java
