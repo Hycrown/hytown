@@ -219,50 +219,50 @@ $C.@DecoratedContainer {
       Group #Member1 { LayoutMode: Left; Anchor: (Bottom: 4);
         Label #Member1Name { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 150); }
         Label #Member1Rank { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 100); }
-        $C.@TextButton #Member1Promote { Text: "+"; Anchor: (Left: 4); }
-        $C.@TextButton #Member1Demote { Text: "-"; Anchor: (Left: 4); }
+        TextButton #Member1Promote { Text: "+"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
+        TextButton #Member1Demote { Text: "-"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
       }
       Group #Member2 { LayoutMode: Left; Anchor: (Bottom: 4);
         Label #Member2Name { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 150); }
         Label #Member2Rank { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 100); }
-        $C.@TextButton #Member2Promote { Text: "+"; Anchor: (Left: 4); }
-        $C.@TextButton #Member2Demote { Text: "-"; Anchor: (Left: 4); }
+        TextButton #Member2Promote { Text: "+"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
+        TextButton #Member2Demote { Text: "-"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
       }
       Group #Member3 { LayoutMode: Left; Anchor: (Bottom: 4);
         Label #Member3Name { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 150); }
         Label #Member3Rank { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 100); }
-        $C.@TextButton #Member3Promote { Text: "+"; Anchor: (Left: 4); }
-        $C.@TextButton #Member3Demote { Text: "-"; Anchor: (Left: 4); }
+        TextButton #Member3Promote { Text: "+"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
+        TextButton #Member3Demote { Text: "-"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
       }
       Group #Member4 { LayoutMode: Left; Anchor: (Bottom: 4);
         Label #Member4Name { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 150); }
         Label #Member4Rank { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 100); }
-        $C.@TextButton #Member4Promote { Text: "+"; Anchor: (Left: 4); }
-        $C.@TextButton #Member4Demote { Text: "-"; Anchor: (Left: 4); }
+        TextButton #Member4Promote { Text: "+"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
+        TextButton #Member4Demote { Text: "-"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
       }
       Group #Member5 { LayoutMode: Left; Anchor: (Bottom: 4);
         Label #Member5Name { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 150); }
         Label #Member5Rank { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 100); }
-        $C.@TextButton #Member5Promote { Text: "+"; Anchor: (Left: 4); }
-        $C.@TextButton #Member5Demote { Text: "-"; Anchor: (Left: 4); }
+        TextButton #Member5Promote { Text: "+"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
+        TextButton #Member5Demote { Text: "-"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
       }
       Group #Member6 { LayoutMode: Left; Anchor: (Bottom: 4);
         Label #Member6Name { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 150); }
         Label #Member6Rank { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 100); }
-        $C.@TextButton #Member6Promote { Text: "+"; Anchor: (Left: 4); }
-        $C.@TextButton #Member6Demote { Text: "-"; Anchor: (Left: 4); }
+        TextButton #Member6Promote { Text: "+"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
+        TextButton #Member6Demote { Text: "-"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
       }
       Group #Member7 { LayoutMode: Left; Anchor: (Bottom: 4);
         Label #Member7Name { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 150); }
         Label #Member7Rank { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 100); }
-        $C.@TextButton #Member7Promote { Text: "+"; Anchor: (Left: 4); }
-        $C.@TextButton #Member7Demote { Text: "-"; Anchor: (Left: 4); }
+        TextButton #Member7Promote { Text: "+"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
+        TextButton #Member7Demote { Text: "-"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
       }
       Group #Member8 { LayoutMode: Left; Anchor: (Bottom: 4);
         Label #Member8Name { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 150); }
         Label #Member8Rank { Text: ""; Style: $C.@DefaultLabelStyle; Anchor: (Width: 100); }
-        $C.@TextButton #Member8Promote { Text: "+"; Anchor: (Left: 4); }
-        $C.@TextButton #Member8Demote { Text: "-"; Anchor: (Left: 4); }
+        TextButton #Member8Promote { Text: "+"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
+        TextButton #Member8Demote { Text: "-"; Anchor: (Left: 4, Width: 22, Height: 22); Padding: (Full: 5); Style: TextButtonStyle(Default: (Background: (Color: #3a506b), LabelStyle: (FontSize: 14, TextColor: #ffffff, HorizontalAlignment: Center, VerticalAlignment: Center)), Hovered: (Background: (Color: #4a607b)), Pressed: (Background: (Color: #2a405b))); }
       }
     }
 

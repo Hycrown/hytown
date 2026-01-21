@@ -586,13 +586,9 @@ public class TownGui extends InteractiveCustomUIPage<TownGui.TownData> {
                                     statusMessage = targetName + " demoted to Resident!";
                                     statusIsError = false;
                                 } else {
-                                    // Already resident - kick them
-                                    town.removeResident(targetId);
-                                    town.logMemberKick(playerId, playerName, targetName);
-                                    townStorage.saveTown(town);
-                                    townStorage.unindexPlayer(targetId);
-                                    statusMessage = targetName + " kicked from town!";
-                                    statusIsError = false;
+                                    // Already resident - cannot demote further
+                                    statusMessage = targetName + " is already at the lowest rank!";
+                                    statusIsError = true;
                                 }
                             }
                         }
