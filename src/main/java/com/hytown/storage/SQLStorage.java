@@ -6,7 +6,8 @@ import com.hytown.data.Town;
 
 import java.sql.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -25,8 +26,8 @@ public class SQLStorage implements StorageProvider {
     private final StorageConfig.SQLConfig config;
     private final Gson gson;
 
-    // Connection pool
-    private final ConcurrentLinkedQueue<Connection> connectionPool = new ConcurrentLinkedQueue<>();
+    // Connection pool - uses blocking queue to avoid busy-waiting
+    private final LinkedBlockingQueue<Connection> connectionPool = new LinkedBlockingQueue<>();
     private final AtomicInteger activeConnections = new AtomicInteger(0);
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private static final int MIN_POOL_SIZE = 2;
@@ -150,18 +151,12 @@ public class SQLStorage implements StorageProvider {
             if (activeConnections.get() < MAX_POOL_SIZE) {
                 conn = createConnection();
             } else {
-                // Wait for a connection to be returned (with timeout)
-                long startTime = System.currentTimeMillis();
-                while (conn == null && (System.currentTimeMillis() - startTime) < 5000) {
-                    conn = connectionPool.poll();
-                    if (conn == null) {
-                        try {
-                            Thread.sleep(50);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new SQLException("Interrupted while waiting for connection");
-                        }
-                    }
+                // Wait for a connection using blocking poll (no busy-waiting)
+                try {
+                    conn = connectionPool.poll(5, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new SQLException("Interrupted while waiting for connection");
                 }
                 if (conn == null) {
                     throw new SQLException("Connection pool exhausted");
