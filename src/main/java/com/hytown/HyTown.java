@@ -85,9 +85,11 @@ public class HyTown extends JavaPlugin {
     private HyTownAPI api;
     private TownEventBus eventBus;
 
-    // Teleport countdown system
-    private final ScheduledExecutorService teleportScheduler = Executors.newScheduledThreadPool(2);
+    // Scheduled task system - efficient thread pool for all periodic tasks
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final Map<String, ScheduledFuture<?>> activeCountdowns = new ConcurrentHashMap<>();
+    private ScheduledFuture<?> upkeepTask;
+    private ScheduledFuture<?> autoSaveTask;
     private static final double MOVE_THRESHOLD = 0.5;
     private static final int TELEPORT_COUNTDOWN = 5;
     private static final Color GREEN = new Color(85, 255, 85);
@@ -245,57 +247,39 @@ public class HyTown extends JavaPlugin {
     }
 
     /**
-     * Start a background thread to check upkeep periodically.
+     * Schedule periodic upkeep checks using efficient ScheduledExecutorService.
      */
     private void startUpkeepChecker() {
-        Thread upkeepThread = new Thread(() -> {
-            while (true) {
-                try {
-                    // Check every 5 minutes
-                    Thread.sleep(300000);
-                    if (upkeepManager != null) {
-                        upkeepManager.checkUpkeep();
-                    }
-                } catch (InterruptedException e) {
-                    break;
-                } catch (Exception e) {
-                    getLogger().atWarning().withCause(e).log("[Upkeep] Error in upkeep check");
+        // Schedule upkeep check every 5 minutes (initial delay 5 min, then repeat)
+        upkeepTask = scheduler.scheduleAtFixedRate(() -> {
+            try {
+                if (upkeepManager != null) {
+                    upkeepManager.checkUpkeep();
                 }
+            } catch (Exception e) {
+                getLogger().atWarning().withCause(e).log("[Upkeep] Error in upkeep check");
             }
-        });
-        upkeepThread.setDaemon(true);
-        upkeepThread.setName("HyTown-UpkeepChecker");
-        upkeepThread.start();
-        getLogger().atInfo().log("[Upkeep] Started background upkeep checker");
+        }, 5, 5, TimeUnit.MINUTES);
+        getLogger().atInfo().log("[Upkeep] Scheduled upkeep checker (every 5 minutes)");
 
-        // Start auto-save thread
+        // Schedule auto-save
         startAutoSave();
     }
 
     /**
-     * Start a background thread to auto-save town data periodically.
-     * This ensures data is saved even if the server crashes.
+     * Schedule periodic auto-save using efficient ScheduledExecutorService.
+     * Saves every 30 minutes to ensure data is preserved even if server crashes.
      */
     private void startAutoSave() {
-        Thread autoSaveThread = new Thread(() -> {
-            while (true) {
-                try {
-                    // Auto-save every 5 minutes
-                    Thread.sleep(300000);
-                    autoSaveTowns();
-                } catch (InterruptedException e) {
-                    // Interrupted - do one final save
-                    autoSaveTowns();
-                    break;
-                } catch (Exception e) {
-                    getLogger().atWarning().withCause(e).log("[AutoSave] Error during auto-save");
-                }
+        // Schedule auto-save every 30 minutes (initial delay 30 min, then repeat)
+        autoSaveTask = scheduler.scheduleAtFixedRate(() -> {
+            try {
+                autoSaveTowns();
+            } catch (Exception e) {
+                getLogger().atWarning().withCause(e).log("[AutoSave] Error during auto-save");
             }
-        });
-        autoSaveThread.setDaemon(true);
-        autoSaveThread.setName("HyTown-AutoSave");
-        autoSaveThread.start();
-        getLogger().atInfo().log("[AutoSave] Started background auto-save (every 5 minutes)");
+        }, 30, 30, TimeUnit.MINUTES);
+        getLogger().atInfo().log("[AutoSave] Scheduled auto-save (every 30 minutes)");
     }
 
     /**
@@ -399,11 +383,18 @@ public class HyTown extends JavaPlugin {
     public void shutdown() {
         getLogger().atInfo().log("[Shutdown] HyTown shutting down...");
 
-        // Shutdown teleport scheduler
+        // Cancel scheduled tasks
+        if (upkeepTask != null) upkeepTask.cancel(false);
+        if (autoSaveTask != null) autoSaveTask.cancel(false);
+
+        // Shutdown scheduler (waits briefly for current tasks)
         try {
-            teleportScheduler.shutdownNow();
+            scheduler.shutdown();
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
         } catch (Exception e) {
-            getLogger().atWarning().withCause(e).log("[Shutdown] Error stopping teleport scheduler");
+            getLogger().atWarning().withCause(e).log("[Shutdown] Error stopping scheduler");
         }
 
         // Shutdown playtime manager (saves all sessions)
@@ -768,7 +759,7 @@ public class HyTown extends JavaPlugin {
         final int[] remaining = {TELEPORT_COUNTDOWN};
         final boolean[] cancelled = {false};
 
-        ScheduledFuture<?> task = teleportScheduler.scheduleAtFixedRate(() -> {
+        ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(() -> {
             if (cancelled[0]) return;
 
             try {
