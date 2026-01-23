@@ -2,11 +2,14 @@ package com.hytown.commands;
 
 import com.hytown.HyTown;
 import com.hytown.data.Town;
+import com.hytown.data.TownRoad;
 import com.hytown.data.TownStorage;
 import com.hytown.events.*;
 import com.hytown.gui.TownAdminGui;
+import com.hytown.util.ChunkUtil;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
@@ -20,6 +23,7 @@ import com.hypixel.hytale.math.vector.Vector3f;
 
 import javax.annotation.Nonnull;
 import java.awt.Color;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -74,7 +78,7 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         switch (action.toLowerCase()) {
             case "gui", "menu" -> handleGui(store, playerRef, playerData, world);
             case "reload" -> handleReload(playerData);
-            case "town" -> handleTown(playerData, arg1, arg2, arg3);
+            case "town" -> handleTown(store, playerRef, playerData, world, arg1, arg2, arg3);
             case "wild" -> handleWild(playerData, arg1, arg2);
             case "debug" -> handleDebug(playerData);
             case "save" -> handleSave(playerData);
@@ -85,6 +89,11 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
             case "player" -> handlePlayer(playerData, arg1, arg2);
             case "spawn" -> handleSpawn(store, playerRef, playerData, world, arg1);
             case "storage" -> handleStorage(playerData, arg1);
+            case "join" -> handleAdminJoin(playerData, playerData.getUuid(), playerData.getUsername(), arg1);
+            case "setmayor" -> handleAdminSetMayor(playerData, playerData.getUuid(), playerData.getUsername(), arg1, arg2);
+            case "leave" -> handleAdminLeave(playerData, playerData.getUuid());
+            case "claimroad" -> handleClaimRoad(store, playerRef, playerData, playerData.getUuid(), world, arg1, arg2);
+            case "claimrect" -> handleClaimRect(store, playerRef, playerData, playerData.getUuid(), world, arg1);
             default -> showHelp(playerData);
         }
     }
@@ -102,17 +111,79 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("Configuration reloaded!").color(GREEN));
     }
 
-    private void handleTown(PlayerRef playerData, String townName, String subAction, String arg) {
+    private void handleTown(Store<EntityStore> store, Ref<EntityStore> playerRef, PlayerRef playerData, World world, String townName, String subAction, String arg) {
         if (townName == null || townName.isEmpty()) {
             playerData.sendMessage(Message.raw("Usage: /townadmin town <name> [action]").color(RED));
+            playerData.sendMessage(Message.raw("       /townadmin town new <name> - Create NPC-owned town").color(GRAY));
             return;
         }
 
         TownStorage townStorage = plugin.getTownStorage();
+
+        // Handle "new" command: /townadmin town new <townname>
+        if (townName.equalsIgnoreCase("new")) {
+            if (subAction == null || subAction.isEmpty()) {
+                playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin town new <townname>").color(YELLOW));
+                playerData.sendMessage(Message.raw("  Creates an NPC-owned town (no real player as mayor)").color(GRAY));
+                return;
+            }
+            String newTownName = subAction;
+
+            // Validate name
+            if (newTownName.length() < 3 || newTownName.length() > 24) {
+                playerData.sendMessage(Message.raw("[ADMIN] Town name must be 3-24 characters!").color(RED));
+                return;
+            }
+            if (!newTownName.matches("^[a-zA-Z0-9_-]+$")) {
+                playerData.sendMessage(Message.raw("[ADMIN] Town name can only contain letters, numbers, _ and -").color(RED));
+                return;
+            }
+
+            // Check if town already exists
+            if (townStorage.townExists(newTownName)) {
+                playerData.sendMessage(Message.raw("[ADMIN] Town '" + newTownName + "' already exists!").color(RED));
+                return;
+            }
+
+            // Get player position for spawn chunk
+            TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
+            Vector3d pos = transform.getPosition();
+            String worldName = world.getName();
+            int chunkX = ChunkUtil.toChunkX(pos.getX());
+            int chunkZ = ChunkUtil.toChunkZ(pos.getZ());
+            String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+            // Check if chunk is already claimed
+            Town existingClaimTown = townStorage.getTownByClaimKey(claimKey);
+            if (existingClaimTown != null) {
+                playerData.sendMessage(Message.raw("[ADMIN] This chunk is already claimed by: " + existingClaimTown.getName()).color(RED));
+                return;
+            }
+
+            // Create NPC-owned town
+            UUID npcMayorId = UUID.nameUUIDFromBytes(("NPC:" + newTownName).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Town newTown = new Town(newTownName, npcMayorId, newTownName);
+            
+            // Claim the spawn chunk
+            newTown.addClaim(claimKey);
+            townStorage.saveTown(newTown);
+            townStorage.indexClaim(claimKey, newTown.getName());
+            
+            // Refresh map
+            plugin.refreshWorldMap(worldName);
+
+            playerData.sendMessage(Message.raw("[ADMIN] Created NPC-owned town: " + newTownName).color(GREEN));
+            playerData.sendMessage(Message.raw("  NPC Mayor: " + newTownName).color(GRAY));
+            playerData.sendMessage(Message.raw("  Spawn chunk: [" + chunkX + ", " + chunkZ + "]").color(GRAY));
+            playerData.sendMessage(Message.raw("  Use /townadmin town " + newTownName + " to manage").color(GRAY));
+            return;
+        }
+
         Town town = townStorage.getTown(townName);
 
         if (town == null) {
             playerData.sendMessage(Message.raw("Town '" + townName + "' not found!").color(RED));
+            playerData.sendMessage(Message.raw("Use /townadmin town new " + townName + " to create it").color(GRAY));
             return;
         }
 
@@ -254,6 +325,44 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
                 } catch (NumberFormatException e) {
                     playerData.sendMessage(Message.raw("Invalid amount!").color(RED));
                 }
+            }
+            case "setnpcmayor" -> {
+                if (arg == null || arg.isEmpty()) {
+                    playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin town " + townName + " setnpcmayor <npcname>").color(YELLOW));
+                    playerData.sendMessage(Message.raw("  Creates a fake NPC player as mayor").color(GRAY));
+                    playerData.sendMessage(Message.raw("  Frees you to create/manage other towns").color(GRAY));
+                    return;
+                }
+                String npcName = arg;
+                // Generate deterministic UUID from NPC name (prefixed to avoid collision with real players)
+                UUID npcId = UUID.nameUUIDFromBytes(("NPC:" + npcName).getBytes(StandardCharsets.UTF_8));
+
+                // Store old mayor info for event
+                UUID oldMayorId = town.getMayorId();
+                String oldMayorName = town.getMayorName();
+
+                // Ensure NPC is added as resident first
+                if (!town.isMember(npcId)) {
+                    town.addResident(npcId, npcName);
+                }
+
+                // Set the NPC as mayor (old mayor becomes assistant automatically via setMayor)
+                town.setMayor(npcId, npcName);
+                townStorage.saveTown(town);
+
+                // Unindex the old mayor from this town so they can join/create other towns
+                townStorage.unindexPlayer(oldMayorId);
+
+                // Fire TownMayorChangeEvent
+                TownMayorChangeEvent mayorEvent = new TownMayorChangeEvent(town, oldMayorId, oldMayorName, npcId, npcName, true);
+                plugin.getEventBus().fire(mayorEvent);
+
+                playerData.sendMessage(Message.raw("[ADMIN] Set NPC mayor for " + town.getName()).color(GOLD));
+                playerData.sendMessage(Message.raw("  NPC Name: " + npcName).color(GREEN));
+                playerData.sendMessage(Message.raw("  NPC UUID: " + npcId).color(GRAY));
+                playerData.sendMessage(Message.raw("  Old Mayor: " + oldMayorName + " -> demoted to assistant").color(GRAY));
+                playerData.sendMessage(Message.raw("  Town upkeep: EXEMPT (NPC-owned)").color(YELLOW));
+                playerData.sendMessage(Message.raw("You can now create or join other towns!").color(GREEN));
             }
             default -> playerData.sendMessage(Message.raw("Unknown action: " + subAction).color(RED));
         }
@@ -704,5 +813,526 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("/townadmin storage migrate").color(WHITE));
         playerData.sendMessage(Message.raw("  Force save all data to configured save backend").color(GRAY));
 
+        // Admin Town Membership
+        playerData.sendMessage(Message.raw("--- Admin Town Membership ---").color(GOLD));
+        playerData.sendMessage(Message.raw("/townadmin join <town>").color(WHITE));
+        playerData.sendMessage(Message.raw("  Join any town as resident (bypasses invite)").color(GRAY));
+        playerData.sendMessage(Message.raw("/townadmin setmayor [town] [player]").color(WHITE));
+        playerData.sendMessage(Message.raw("  Set yourself or another player as mayor").color(GRAY));
+        playerData.sendMessage(Message.raw("/townadmin leave").color(WHITE));
+        playerData.sendMessage(Message.raw("  Leave your current town").color(GRAY));
+        playerData.sendMessage(Message.raw("/townadmin town <name> setnpcmayor <npcname>").color(WHITE));
+        playerData.sendMessage(Message.raw("  Set an NPC as mayor (frees you to manage other towns)").color(GRAY));
+
+        // Admin Claiming
+        playerData.sendMessage(Message.raw("--- Admin Claiming ---").color(GOLD));
+        playerData.sendMessage(Message.raw("/townadmin claimroad <dir> <name>").color(WHITE));
+        playerData.sendMessage(Message.raw("  Claim road 50k blocks in direction (n/s/e/w/all)").color(GRAY));
+        playerData.sendMessage(Message.raw("  Creates NPC-controlled road for your town").color(GRAY));
+        playerData.sendMessage(Message.raw("/townadmin claimrect <size>").color(WHITE));
+        playerData.sendMessage(Message.raw("  Claim NxN rectangle from current position").color(GRAY));
+        playerData.sendMessage(Message.raw("  Must stand in your town's territory").color(GRAY));
+    }
+
+    // ==================== ADMIN TOWN MEMBERSHIP COMMANDS ====================
+
+    /**
+     * Admin joins any town as resident (bypasses invite system).
+     */
+    private void handleAdminJoin(PlayerRef playerData, UUID playerId, String playerName, String townName) {
+        TownStorage townStorage = plugin.getTownStorage();
+
+        if (townName == null || townName.isEmpty()) {
+            playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin join <townname>").color(YELLOW));
+            playerData.sendMessage(Message.raw("  Joins any town as resident (bypasses invite)").color(GRAY));
+            return;
+        }
+
+        // Check if already in a town
+        Town currentTown = townStorage.getPlayerTown(playerId);
+        if (currentTown != null) {
+            playerData.sendMessage(Message.raw("[ADMIN] Error: Already in town '" + currentTown.getName() + "'").color(RED));
+            playerData.sendMessage(Message.raw("  Use /townadmin leave first").color(GRAY));
+            return;
+        }
+
+        // Get target town
+        Town town = townStorage.getTown(townName);
+        if (town == null) {
+            playerData.sendMessage(Message.raw("[ADMIN] Error: Town '" + townName + "' not found").color(RED));
+            return;
+        }
+
+        // Add admin as resident (bypassing invite system)
+        town.addResident(playerId, playerName);
+        townStorage.saveTown(town);
+        townStorage.indexPlayer(playerId, town.getName());
+
+        // Fire TownJoinEvent
+        TownJoinEvent joinEvent = new TownJoinEvent(town, playerId, playerName, false);
+        plugin.getEventBus().fire(joinEvent);
+
+        playerData.sendMessage(Message.raw("[ADMIN] Joined town as resident").color(GOLD));
+        playerData.sendMessage(Message.raw("  Town: " + town.getName()).color(GREEN));
+        playerData.sendMessage(Message.raw("  Rank: Resident (invite bypassed)").color(GRAY));
+        playerData.sendMessage(Message.raw("  Use /townadmin setmayor to become mayor").color(GRAY));
+    }
+
+    /**
+     * Admin sets self or another player as mayor of a town.
+     * Usage: /townadmin setmayor [townname] [playername]
+     * - No args: sets self as mayor of current town
+     * - townname only: sets self as mayor of specified town
+     * - townname + playername: sets specified player as mayor
+     */
+    private void handleAdminSetMayor(PlayerRef playerData, UUID playerId, String playerName, String arg1, String arg2) {
+        TownStorage townStorage = plugin.getTownStorage();
+        Town town;
+        UUID newMayorId;
+        String newMayorName;
+
+        if (arg1 == null || arg1.isEmpty()) {
+            // No args - use current town, set self as mayor
+            town = townStorage.getPlayerTown(playerId);
+            if (town == null) {
+                playerData.sendMessage(Message.raw("[ADMIN] Error: You are not in a town").color(RED));
+                playerData.sendMessage(Message.raw("  Usage: /townadmin setmayor <townname> [player]").color(GRAY));
+                return;
+            }
+            newMayorId = playerId;
+            newMayorName = playerName;
+        } else if (arg2 == null || arg2.isEmpty()) {
+            // One arg - could be town name (set self as mayor) or player name (current town)
+            town = townStorage.getTown(arg1);
+            if (town != null) {
+                // arg1 is a town name, set self as mayor
+                newMayorId = playerId;
+                newMayorName = playerName;
+            } else {
+                // arg1 might be a player name for current town
+                town = townStorage.getPlayerTown(playerId);
+                if (town == null) {
+                    playerData.sendMessage(Message.raw("[ADMIN] Error: Town '" + arg1 + "' not found").color(RED));
+                    return;
+                }
+                // Find the player in the town
+                newMayorId = null;
+                newMayorName = arg1;
+                for (var entry : town.getResidentNames().entrySet()) {
+                    if (entry.getValue().equalsIgnoreCase(arg1)) {
+                        newMayorId = entry.getKey();
+                        newMayorName = entry.getValue();
+                        break;
+                    }
+                }
+                if (newMayorId == null) {
+                    playerData.sendMessage(Message.raw("[ADMIN] Error: " + arg1 + " is not in your town").color(RED));
+                    return;
+                }
+            }
+        } else {
+            // Two args - town name and player name
+            town = townStorage.getTown(arg1);
+            if (town == null) {
+                playerData.sendMessage(Message.raw("[ADMIN] Error: Town '" + arg1 + "' not found").color(RED));
+                return;
+            }
+            // Find the player
+            newMayorId = null;
+            newMayorName = arg2;
+            for (var entry : town.getResidentNames().entrySet()) {
+                if (entry.getValue().equalsIgnoreCase(arg2)) {
+                    newMayorId = entry.getKey();
+                    newMayorName = entry.getValue();
+                    break;
+                }
+            }
+            if (newMayorId == null) {
+                // Player not in town yet - if it's the admin, add them first
+                if (arg2.equalsIgnoreCase(playerName)) {
+                    town.addResident(playerId, playerName);
+                    newMayorId = playerId;
+                    newMayorName = playerName;
+                    townStorage.indexPlayer(playerId, town.getName());
+                } else {
+                    playerData.sendMessage(Message.raw("[ADMIN] Error: " + arg2 + " is not in " + town.getName()).color(RED));
+                    playerData.sendMessage(Message.raw("  They must be a resident first").color(GRAY));
+                    return;
+                }
+            }
+        }
+
+        // Store old mayor info for event
+        UUID oldMayorId = town.getMayorId();
+        String oldMayorName = town.getMayorName();
+
+        // If new mayor is not in the town yet (admin joining + becoming mayor), add them
+        if (!town.isMember(newMayorId)) {
+            town.addResident(newMayorId, newMayorName);
+            townStorage.indexPlayer(newMayorId, town.getName());
+        }
+
+        // Set new mayor (old mayor automatically becomes assistant)
+        town.setMayor(newMayorId, newMayorName);
+        townStorage.saveTown(town);
+
+        // Fire TownMayorChangeEvent
+        TownMayorChangeEvent mayorEvent = new TownMayorChangeEvent(town, oldMayorId, oldMayorName, newMayorId, newMayorName, true);
+        plugin.getEventBus().fire(mayorEvent);
+
+        playerData.sendMessage(Message.raw("[ADMIN] Mayor changed for " + town.getName()).color(GOLD));
+        playerData.sendMessage(Message.raw("  New Mayor: " + newMayorName).color(GREEN));
+        if (!oldMayorId.equals(newMayorId)) {
+            playerData.sendMessage(Message.raw("  Old Mayor: " + oldMayorName + " -> demoted to assistant").color(GRAY));
+        }
+    }
+
+    /**
+     * Admin leaves their current town.
+     * If admin is mayor, town is NOT deleted - they're just removed.
+     */
+    private void handleAdminLeave(PlayerRef playerData, UUID playerId) {
+        TownStorage townStorage = plugin.getTownStorage();
+        Town town = townStorage.getPlayerTown(playerId);
+
+        if (town == null) {
+            playerData.sendMessage(Message.raw("[ADMIN] Error: You are not in a town").color(RED));
+            return;
+        }
+
+        String townName = town.getName();
+        boolean wasMayor = town.isMayor(playerId);
+        String previousRank = wasMayor ? "Mayor" : (town.isAssistant(playerId) ? "Assistant" : "Resident");
+
+        // Fire TownLeaveEvent
+        TownLeaveEvent leaveEvent = TownLeaveEvent.voluntary(town, playerId, playerData.getUsername());
+        plugin.getEventBus().fire(leaveEvent);
+
+        // Remove from town
+        town.removeResident(playerId);
+        townStorage.saveTown(town);
+        townStorage.unindexPlayer(playerId);
+
+        playerData.sendMessage(Message.raw("[ADMIN] Left town").color(GOLD));
+        playerData.sendMessage(Message.raw("  Town: " + townName).color(GREEN));
+        playerData.sendMessage(Message.raw("  Previous Rank: " + previousRank).color(GRAY));
+        if (wasMayor) {
+            playerData.sendMessage(Message.raw("  Warning: Town needs new mayor!").color(YELLOW));
+            playerData.sendMessage(Message.raw("  Use /townadmin town " + townName + " setmayor <player>").color(GRAY));
+            if (town.getResidentCount() == 0) {
+                playerData.sendMessage(Message.raw("  Warning: Town has no residents left!").color(RED));
+            }
+        }
+    }
+
+    // ==================== ADMIN CLAIMING COMMANDS ====================
+
+    /**
+     * Claims chunks in cardinal directions for up to 50,000 blocks (~1,562 chunks per direction).
+     * Creates a new NPC-owned town with the road name and claims for that town.
+     * Admin-only: Free and ignores all limits.
+     *
+     * Usage: /townadmin claimroad <direction> <name>
+     * Example: /townadmin claimroad north Kings -> Creates NPC town "Kings" with road "North Kings"
+     */
+    private void handleClaimRoad(Store<EntityStore> store, Ref<EntityStore> playerRef,
+                                  PlayerRef playerData, UUID playerId, World world,
+                                  String direction, String roadName) {
+        TownStorage townStorage = plugin.getTownStorage();
+
+        // Require both direction and name
+        if (direction == null || direction.isEmpty()) {
+            playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin claimroad <direction> <name>").color(YELLOW));
+            playerData.sendMessage(Message.raw("  Directions: north, south, east, west, all").color(GRAY));
+            playerData.sendMessage(Message.raw("  Example: /townadmin claimroad north Kings").color(GRAY));
+            playerData.sendMessage(Message.raw("  Creates NPC-owned town with road claims").color(GRAY));
+            playerData.sendMessage(Message.raw("  Town name = road name, PvP enabled by default").color(GRAY));
+            return;
+        }
+
+        if (roadName == null || roadName.isEmpty()) {
+            playerData.sendMessage(Message.raw("[ADMIN] Error: Road/town name required").color(RED));
+            playerData.sendMessage(Message.raw("  Example: /townadmin claimroad " + direction + " Kings").color(GRAY));
+            return;
+        }
+
+        // Get or create the NPC-owned town with this road name
+        Town town = townStorage.getTown(roadName);
+        boolean createdNewTown = false;
+        if (town == null) {
+            // Create new NPC-owned town for this road
+            UUID npcMayorId = UUID.nameUUIDFromBytes(("NPC:" + roadName).getBytes(StandardCharsets.UTF_8));
+            town = new Town(roadName, npcMayorId, roadName); // Town name = road name, NPC mayor name = road name
+            town.getSettings().setPvpEnabled(true); // PvP ON by default for road towns
+            townStorage.saveTown(town);
+            createdNewTown = true;
+            playerData.sendMessage(Message.raw("[ADMIN] Created new NPC-owned town: " + roadName).color(GREEN));
+            playerData.sendMessage(Message.raw("  NPC Mayor: " + roadName).color(GRAY));
+            playerData.sendMessage(Message.raw("  PvP: ENABLED (default for roads)").color(YELLOW));
+        } else {
+            playerData.sendMessage(Message.raw("[ADMIN] Using existing town: " + roadName).color(YELLOW));
+        }
+
+        // Get player position
+        TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
+        Vector3d pos = transform.getPosition();
+        String worldName = world.getName();
+        int startChunkX = ChunkUtil.toChunkX(pos.getX());
+        int startChunkZ = ChunkUtil.toChunkZ(pos.getZ());
+
+        // Parse direction(s)
+        java.util.List<String> directions = new java.util.ArrayList<>();
+        if (direction.equalsIgnoreCase("all")) {
+            directions.addAll(java.util.List.of("north", "south", "east", "west"));
+        } else {
+            directions.add(direction.toLowerCase());
+        }
+
+        // Validate directions
+        for (String dir : directions) {
+            if (!dir.equals("north") && !dir.equals("south") && !dir.equals("east") && !dir.equals("west")) {
+                playerData.sendMessage(Message.raw("[ADMIN] Invalid direction: " + dir).color(RED));
+                playerData.sendMessage(Message.raw("  Valid: north, south, east, west, all").color(GRAY));
+                return;
+            }
+        }
+
+        // 50,000 blocks / 32 blocks per chunk = 1,562 chunks max per direction
+        int maxChunks = 1562;
+        int totalClaimed = 0;
+        int totalSkipped = 0;
+
+        playerData.sendMessage(Message.raw("[ADMIN] Creating road '" + roadName + "' for " + town.getName()).color(GOLD));
+        playerData.sendMessage(Message.raw("  Origin: chunk [" + startChunkX + ", " + startChunkZ + "]").color(GRAY));
+        playerData.sendMessage(Message.raw("  Max distance: 50,000 blocks per direction").color(GRAY));
+
+        for (String dir : directions) {
+            // Create road object for this direction
+            String dirDisplay = direction.equalsIgnoreCase("all") ? dir : direction;
+            TownRoad road = new TownRoad(roadName, dirDisplay, worldName, startChunkX, startChunkZ);
+            String roadId = Town.generateRoadId(dirDisplay, roadName);
+
+            // Check if road with this ID already exists
+            if (town.getRoad(roadId) != null) {
+                playerData.sendMessage(Message.raw("  Road '" + road.getDisplayName() + "' already exists!").color(RED));
+                continue;
+            }
+
+            int dx = 0, dz = 0;
+            switch (dir) {
+                case "north" -> dz = -1;
+                case "south" -> dz = 1;
+                case "east" -> dx = 1;
+                case "west" -> dx = -1;
+            }
+
+            int claimed = 0, skipped = 0;
+            for (int i = 1; i <= maxChunks; i++) {
+                int chunkX = startChunkX + (dx * i);
+                int chunkZ = startChunkZ + (dz * i);
+                String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+                // Check if already claimed by any town
+                Town existingTown = townStorage.getTownByClaimKey(claimKey);
+                if (existingTown != null) {
+                    skipped++;
+                    continue; // Skip, don't stop - continue claiming beyond
+                }
+
+                // Check if claimed by personal claims
+                UUID personalOwner = plugin.getClaimManager().getOwnerAt(worldName, chunkX * 32, chunkZ * 32);
+                if (personalOwner != null) {
+                    skipped++;
+                    continue;
+                }
+
+                // Claim it for the town and add to road
+                town.addClaim(claimKey);
+                townStorage.indexClaim(claimKey, town.getName());
+                road.addClaimKey(claimKey);
+                claimed++;
+
+                // Progress report every 500 chunks
+                if (claimed % 500 == 0) {
+                    playerData.sendMessage(Message.raw("  " + dir.toUpperCase() + ": " + claimed + " chunks claimed so far...").color(GRAY));
+                }
+            }
+
+            // Add road to town if it has any claims
+            if (road.getChunkCount() > 0) {
+                town.addRoad(roadId, road);
+                playerData.sendMessage(Message.raw("  " + road.getDisplayName() + ": " + claimed + " claimed, " + skipped + " skipped").color(GREEN));
+                playerData.sendMessage(Message.raw("    NPC Controller: " + road.getNpcControllerName()).color(GRAY));
+            } else {
+                playerData.sendMessage(Message.raw("  " + dir.toUpperCase() + ": No chunks available to claim").color(YELLOW));
+            }
+
+            totalClaimed += claimed;
+            totalSkipped += skipped;
+        }
+
+        townStorage.saveTown(town);
+        plugin.refreshWorldMap(worldName);
+
+        playerData.sendMessage(Message.raw("[ADMIN] ========== Claim Road Complete ==========").color(GOLD));
+        playerData.sendMessage(Message.raw("  Total Claimed: " + totalClaimed + " chunks").color(GREEN));
+        playerData.sendMessage(Message.raw("  Total Skipped: " + totalSkipped + " chunks (existing claims)").color(YELLOW));
+        playerData.sendMessage(Message.raw("  Town Claims: " + town.getClaimCount() + " total").color(WHITE));
+        playerData.sendMessage(Message.raw("  Roads: " + town.getRoads().size() + " | Road Chunks: " + town.getTotalRoadChunks()).color(WHITE));
+        playerData.sendMessage(Message.raw("  Cost: FREE (admin bypass)").color(GRAY));
+    }
+
+    /**
+     * Claims a rectangle of chunks centered on player position.
+     * Size N = claims N chunks in each direction = (2N+1)^2 area.
+     * Must be used from within existing town claims (uses BFS expansion).
+     * Admin-only: Free and ignores all limits.
+     */
+    private void handleClaimRect(Store<EntityStore> store, Ref<EntityStore> playerRef,
+                                  PlayerRef playerData, UUID playerId, World world, String sizeStr) {
+        TownStorage townStorage = plugin.getTownStorage();
+        Town town = townStorage.getPlayerTown(playerId);
+
+        if (town == null) {
+            playerData.sendMessage(Message.raw("[ADMIN] Error: You must be in a town to use this command").color(RED));
+            playerData.sendMessage(Message.raw("  Use /townadmin join <town> first").color(GRAY));
+            return;
+        }
+
+        // Parse size
+        int size;
+        if (sizeStr == null || sizeStr.isEmpty()) {
+            playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin claimrect <size>").color(YELLOW));
+            playerData.sendMessage(Message.raw("  Size 5 = 5 chunks in each direction = 11x11 area").color(GRAY));
+            playerData.sendMessage(Message.raw("  Must stand in existing town claim").color(GRAY));
+            playerData.sendMessage(Message.raw("  Can claim over road claims from other towns").color(GRAY));
+            return;
+        }
+
+        try {
+            size = Integer.parseInt(sizeStr);
+        } catch (NumberFormatException e) {
+            playerData.sendMessage(Message.raw("[ADMIN] Error: Invalid size - use a number").color(RED));
+            return;
+        }
+
+        if (size < 1 || size > 50) {
+            playerData.sendMessage(Message.raw("[ADMIN] Error: Size must be 1-50").color(RED));
+            return;
+        }
+
+        // Get player position
+        TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
+        Vector3d pos = transform.getPosition();
+        String worldName = world.getName();
+        int centerX = ChunkUtil.toChunkX(pos.getX());
+        int centerZ = ChunkUtil.toChunkZ(pos.getZ());
+
+        // Calculate bounds
+        int minX = centerX - size;
+        int maxX = centerX + size;
+        int minZ = centerZ - size;
+        int maxZ = centerZ + size;
+        int totalArea = (2 * size + 1) * (2 * size + 1);
+
+        // Check that current chunk is owned by the town
+        String currentClaimKey = worldName + ":" + centerX + "," + centerZ;
+        if (!town.ownsClaim(currentClaimKey)) {
+            playerData.sendMessage(Message.raw("[ADMIN] Error: Must stand in town territory").color(RED));
+            playerData.sendMessage(Message.raw("  This command expands from existing claims").color(GRAY));
+            return;
+        }
+
+        playerData.sendMessage(Message.raw("[ADMIN] Claiming rectangle for " + town.getName()).color(GOLD));
+        playerData.sendMessage(Message.raw("  Size: " + (2*size+1) + "x" + (2*size+1) + " (" + totalArea + " chunks max)").color(GRAY));
+        playerData.sendMessage(Message.raw("  Center: chunk [" + centerX + ", " + centerZ + "]").color(GRAY));
+
+        // Use BFS to expand from existing claims ensuring connectivity
+        java.util.Set<String> visited = new java.util.HashSet<>();
+        java.util.Queue<int[]> queue = new java.util.LinkedList<>();
+        int claimed = 0, skipped = 0;
+
+        // Seed with all existing town claims in the rectangle
+        for (String claimKey : town.getClaimKeys()) {
+            if (!claimKey.startsWith(worldName + ":")) continue;
+            int[] coords = Town.parseClaimCoords(claimKey);
+            if (coords == null) continue;
+            int cx = coords[0], cz = coords[1];
+            if (cx >= minX && cx <= maxX && cz >= minZ && cz <= maxZ) {
+                queue.add(new int[]{cx, cz});
+                visited.add(cx + "," + cz);
+            }
+        }
+
+        if (queue.isEmpty()) {
+            // Should not happen since we checked current chunk is owned
+            queue.add(new int[]{centerX, centerZ});
+            visited.add(centerX + "," + centerZ);
+        }
+
+        // BFS expansion
+        int[][] deltas = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}}; // N, S, W, E
+        while (!queue.isEmpty()) {
+            int[] current = queue.poll();
+            int cx = current[0], cz = current[1];
+
+            for (int[] d : deltas) {
+                int nx = cx + d[0], nz = cz + d[1];
+                String key = nx + "," + nz;
+
+                // Check bounds
+                if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
+                if (visited.contains(key)) continue;
+                visited.add(key);
+
+                String claimKey = worldName + ":" + nx + "," + nz;
+
+                // Already owned by this town - just add to queue for expansion
+                if (town.ownsClaim(claimKey)) {
+                    queue.add(new int[]{nx, nz});
+                    continue;
+                }
+
+                // Claimed by other town - check if it's a road claim (admins can take road claims)
+                Town existingTown = townStorage.getTownByClaimKey(claimKey);
+                if (existingTown != null) {
+                    // Check if it's a road claim - admins can claim over roads
+                    if (existingTown.isRoadClaim(claimKey)) {
+                        // Remove claim from the other town's road and regular claims
+                        existingTown.removeClaimFromRoad(claimKey);
+                        existingTown.removeClaim(claimKey);
+                        townStorage.unindexClaim(claimKey);
+                        townStorage.saveTown(existingTown);
+                        // Continue to claim it below
+                    } else {
+                        // Not a road claim - skip
+                        skipped++;
+                        continue;
+                    }
+                }
+
+                // Personal claim - skip
+                UUID personalOwner = plugin.getClaimManager().getOwnerAt(worldName, nx * 32, nz * 32);
+                if (personalOwner != null) {
+                    skipped++;
+                    continue;
+                }
+
+                // Claim it (admin bypasses all limits - direct add, no ClaimManager)
+                town.addClaim(claimKey);
+                townStorage.indexClaim(claimKey, town.getName());
+                claimed++;
+                queue.add(new int[]{nx, nz});
+            }
+        }
+
+        townStorage.saveTown(town);
+        plugin.refreshWorldMap(worldName);
+
+        playerData.sendMessage(Message.raw("[ADMIN] ========== Claim Rect Complete ==========").color(GOLD));
+        playerData.sendMessage(Message.raw("  New Claims: " + claimed + " chunks").color(GREEN));
+        playerData.sendMessage(Message.raw("  Skipped: " + skipped + " chunks (other town claims)").color(YELLOW));
+        playerData.sendMessage(Message.raw("  Town Claims: " + town.getClaimCount() + " total").color(WHITE));
+        playerData.sendMessage(Message.raw("  Cost: FREE (admin bypass)").color(GRAY));
     }
 }

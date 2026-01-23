@@ -9,8 +9,10 @@ import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import java.awt.Color;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.UUID;
 
 /**
  * Manages daily town upkeep collection.
@@ -58,9 +60,16 @@ public class UpkeepManager {
 
     /**
      * Check if upkeep should be collected for this town today.
-     * Returns false if upkeep was already collected today.
+     * Returns false if:
+     * - Upkeep was already collected today
+     * - Town is owned by an NPC (NPC-owned towns are exempt from upkeep)
      */
     private boolean shouldCollectUpkeep(Town town) {
+        // NPC-owned towns are exempt from upkeep
+        if (isNpcOwnedTown(town)) {
+            return false;
+        }
+
         long lastUpkeep = town.getLastUpkeepTime();
         if (lastUpkeep <= 0) return true; // Never collected
 
@@ -72,6 +81,22 @@ public class UpkeepManager {
         // Only collect if last upkeep was on a different day
         return lastUpkeepDate.getDayOfYear() != now.getDayOfYear() ||
                lastUpkeepDate.getYear() != now.getYear();
+    }
+
+    /**
+     * Checks if a town is owned by an NPC (fake player created by admin).
+     * NPC UUIDs are generated from "NPC:" + npcName, so we check if the mayor's
+     * UUID matches the deterministic pattern.
+     */
+    public boolean isNpcOwnedTown(Town town) {
+        if (town == null) return false;
+        UUID mayorId = town.getMayorId();
+        String mayorName = town.getMayorName();
+        if (mayorId == null || mayorName == null) return false;
+
+        // Check if the mayor UUID matches the NPC pattern
+        UUID expectedNpcId = UUID.nameUUIDFromBytes(("NPC:" + mayorName).getBytes(StandardCharsets.UTF_8));
+        return mayorId.equals(expectedNpcId);
     }
 
     /**
@@ -154,8 +179,14 @@ public class UpkeepManager {
 
     /**
      * Calculate upkeep for a town.
+     * NPC-owned towns have no upkeep.
      */
     public double calculateUpkeep(Town town) {
+        // NPC-owned towns have no upkeep
+        if (isNpcOwnedTown(town)) {
+            return 0;
+        }
+
         double base = config.getTownUpkeepBase();
         double perClaim = config.getTownUpkeepPerClaim();
         int claims = town.getClaimCount();

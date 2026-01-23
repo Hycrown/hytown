@@ -18,6 +18,7 @@ C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\Pla
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\PlaytimeStorage.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\PlotSettings.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\Town.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\TownRoad.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\TownSettings.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\TownStorage.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\data\TownTransaction.java
@@ -42,6 +43,7 @@ C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\gui\Town
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\listeners\ClaimProtectionListener.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\managers\ClaimManager.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\managers\PlaytimeManager.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\managers\TownBorderManager.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\managers\UpkeepManager.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\map\BitmapFont.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\map\ClaimColorGenerator.java
@@ -57,6 +59,7 @@ C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\systems\
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\systems\BlockPlaceProtectionSystem.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\systems\BlockUseProtectionSystem.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\systems\ClaimTitleSystem.java
+C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\systems\TownBorderRenderSystem.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\systems\TownCreatureDespawnSystem.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\systems\WildernessHarvestSystem.java
 C:\Users\Crehop\Desktop\HyCrownDev\town\HyTown\src\main\java\com\hytown\ui\TownyHelpPage.java

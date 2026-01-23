@@ -31,12 +31,13 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
 
     private final HyTown plugin;
     private final World world;
+    private final java.util.UUID playerId;
 
     private String inputValue = "";
     private String targetTownName = "";
     private String statusMessage = "";
     private boolean statusIsError = false;
-    private String currentTab = "economy"; // economy, upkeep, wild, ranks
+    private String currentTab = "economy"; // economy, upkeep, wild, ranks, claim
 
     private static final Color GREEN = new Color(85, 255, 85);
     private static final Color RED = new Color(255, 85, 85);
@@ -46,6 +47,7 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
         super(playerRef, CustomPageLifetime.CanDismiss, AdminData.CODEC);
         this.plugin = plugin;
         this.world = world;
+        this.playerId = playerRef.getUuid();
     }
 
     @Override
@@ -363,6 +365,8 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
                 EventData.of("Tab", "personal"), false);
         evt.addEventBinding(CustomUIEventBindingType.Activating, "#DataTab",
                 EventData.of("Tab", "data"), false);
+        evt.addEventBinding(CustomUIEventBindingType.Activating, "#ClaimTab",
+                EventData.of("Tab", "claim"), false);
 
         // Tab highlighting not supported on TextButton - panels are shown/hidden instead
 
@@ -381,6 +385,7 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
         cmd.set("#WildPanel.Visible", currentTab.equals("wild"));
         cmd.set("#PersonalPanel.Visible", currentTab.equals("personal"));
         cmd.set("#DataPanel.Visible", currentTab.equals("data"));
+        cmd.set("#ClaimPanel.Visible", currentTab.equals("claim"));
 
         switch (currentTab) {
             case "economy" -> buildEconomyPanel(cmd, evt, config);
@@ -388,6 +393,7 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
             case "wild" -> buildWildPanel(cmd, evt, config);
             case "personal" -> buildPersonalPanel(cmd, evt, config);
             case "data" -> buildDataPanel(cmd, evt, config);
+            case "claim" -> buildClaimPanel(cmd, evt);
         }
     }
 
@@ -482,6 +488,20 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
             }
         } else {
             cmd.set("#TargetTownBonusValue.Text", "0");
+        }
+    }
+
+    private void buildClaimPanel(UICommandBuilder cmd, UIEventBuilder evt) {
+        // Get current player's town info using stored playerId
+        Town town = plugin.getTownStorage().getPlayerTown(playerId);
+        if (town != null) {
+            cmd.set("#CurrentTownName.Text", town.getName());
+            cmd.set("#CurrentTownClaims.Text", String.valueOf(town.getClaimCount()));
+            cmd.set("#CurrentTownRoads.Text", town.getRoads().size() + " (" + town.getTotalRoadChunks() + " chunks)");
+        } else {
+            cmd.set("#CurrentTownName.Text", "None (use /townadmin join)");
+            cmd.set("#CurrentTownClaims.Text", "-");
+            cmd.set("#CurrentTownRoads.Text", "-");
         }
     }
 

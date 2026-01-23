@@ -2,6 +2,7 @@ package com.hytown.commands;
 
 import com.hytown.HyTown;
 import com.hytown.data.Town;
+import com.hytown.data.TownRoad;
 import com.hytown.data.TownStorage;
 import com.hytown.data.TownTransaction;
 import com.hytown.events.*;
@@ -102,7 +103,7 @@ public class TownCommand extends AbstractPlayerCommand {
         if (args.length == 0) {
             if (invokedAsClaim) {
                 // /claim with no args = /town claim
-                handleClaim(store, playerRef, playerData, playerData.getUuid(), world);
+                handleClaim(store, playerRef, playerData, playerData.getUuid(), world, isAdmin);
                 return;
             }
             showHelp(playerData, isAdmin);
@@ -121,7 +122,7 @@ public class TownCommand extends AbstractPlayerCommand {
             case "help", "?" -> handleHelp(store, playerRef, playerData, world, isAdmin);
             case "new", "create" -> handleNew(store, playerRef, playerData, playerId, playerName, world, arg1);
             case "delete" -> handleDelete(playerData, playerId);
-            case "claim" -> handleClaim(store, playerRef, playerData, playerId, world);
+            case "claim" -> handleClaim(store, playerRef, playerData, playerId, world, isAdmin);
             case "unclaim" -> handleUnclaim(store, playerRef, playerData, playerId, world);
             case "add", "invite" -> handleInvite(playerData, playerId, arg1);
             case "kick" -> handleKick(playerData, playerId, arg1);
@@ -142,6 +143,10 @@ public class TownCommand extends AbstractPlayerCommand {
             case "board", "motd" -> handleBoard(ctx, playerData, playerId, args);
             case "deny" -> handleDeny(playerData, playerId, arg1);
             case "rename" -> handleRename(playerData, playerId, playerName, arg1);
+            case "roads" -> handleRoads(playerData, playerId);
+            case "nameroad" -> handleNameRoad(playerData, playerId, arg1, arg2);
+            case "border" -> handleBorder(playerData, playerId);
+            case "chunkborders" -> handleChunkBorders(playerData, playerId);
             default -> showHelp(playerData, isAdmin);
         }
     }
@@ -238,7 +243,7 @@ public class TownCommand extends AbstractPlayerCommand {
     }
 
     private void handleClaim(Store<EntityStore> store, Ref<EntityStore> playerRef,
-                             PlayerRef playerData, UUID playerId, World world) {
+                             PlayerRef playerData, UUID playerId, World world, boolean isAdmin) {
         TownStorage townStorage = plugin.getTownStorage();
         Town town = townStorage.getPlayerTown(playerId);
         String playerName = playerData.getUsername();
@@ -267,9 +272,25 @@ public class TownCommand extends AbstractPlayerCommand {
         }
 
         Town existingTown = townStorage.getTownByClaimKey(claimKey);
+        boolean tookFromRoad = false;
         if (existingTown != null) {
-            playerData.sendMessage(Message.raw("This chunk is claimed by: " + existingTown.getName()).color(RED));
-            return;
+            // Check if admin and if it's a road claim - admins can claim over roads
+            if (isAdmin && existingTown.isRoadClaim(claimKey)) {
+                // Remove claim from the other town's road
+                TownRoad affectedRoad = existingTown.getRoadByClaim(claimKey);
+                String roadName = affectedRoad != null ? affectedRoad.getDisplayName() : "unknown";
+                existingTown.removeClaimFromRoad(claimKey);
+                existingTown.removeClaim(claimKey);
+                townStorage.unindexClaim(claimKey);
+                townStorage.saveTown(existingTown);
+                tookFromRoad = true;
+                playerData.sendMessage(Message.raw("[ADMIN] Claiming over road chunk").color(GOLD));
+                playerData.sendMessage(Message.raw("  From Town: " + existingTown.getName()).color(YELLOW));
+                playerData.sendMessage(Message.raw("  Road: " + roadName).color(GRAY));
+            } else {
+                playerData.sendMessage(Message.raw("This chunk is claimed by: " + existingTown.getName()).color(RED));
+                return;
+            }
         }
 
         // Check adjacency - claims must be face-adjacent (not diagonal)
@@ -1351,6 +1372,112 @@ public class TownCommand extends AbstractPlayerCommand {
         }
     }
 
+    // ==================== ROAD MANAGEMENT COMMANDS ====================
+
+    /**
+     * Lists all roads in the player's town.
+     */
+    private void handleRoads(PlayerRef playerData, UUID playerId) {
+        TownStorage townStorage = plugin.getTownStorage();
+        Town town = townStorage.getPlayerTown(playerId);
+
+        if (town == null) {
+            playerData.sendMessage(Message.raw("You are not in a town!").color(RED));
+            return;
+        }
+
+        java.util.Map<String, TownRoad> roads = town.getRoads();
+        if (roads.isEmpty()) {
+            playerData.sendMessage(Message.raw("Your town has no roads.").color(YELLOW));
+            playerData.sendMessage(Message.raw("Use /town claimroad <direction> <name> to create one.").color(GRAY));
+            return;
+        }
+
+        playerData.sendMessage(Message.raw("========== Town Roads ==========").color(GOLD));
+        playerData.sendMessage(Message.raw("Total: " + roads.size() + " roads, " + town.getTotalRoadChunks() + " chunks").color(WHITE));
+
+        for (java.util.Map.Entry<String, TownRoad> entry : roads.entrySet()) {
+            TownRoad road = entry.getValue();
+            playerData.sendMessage(Message.raw("  " + road.getDisplayName()).color(GREEN));
+            playerData.sendMessage(Message.raw("    ID: " + entry.getKey() + " | Chunks: " + road.getChunkCount()).color(GRAY));
+            playerData.sendMessage(Message.raw("    NPC: " + road.getNpcControllerName()).color(GRAY));
+        }
+    }
+
+    /**
+     * Renames a road.
+     * Usage: /town nameroad <roadId> <newName>
+     */
+    private void handleNameRoad(PlayerRef playerData, UUID playerId, String roadId, String newName) {
+        TownStorage townStorage = plugin.getTownStorage();
+        Town town = townStorage.getPlayerTown(playerId);
+
+        if (town == null) {
+            playerData.sendMessage(Message.raw("You are not in a town!").color(RED));
+            return;
+        }
+
+        // Check if player is mayor or assistant
+        if (!town.isAssistant(playerId)) {
+            playerData.sendMessage(Message.raw("Only the mayor or assistants can rename roads!").color(RED));
+            return;
+        }
+
+        if (roadId == null || roadId.isEmpty()) {
+            playerData.sendMessage(Message.raw("Usage: /town nameroad <roadId> <newName>").color(RED));
+            playerData.sendMessage(Message.raw("Use /town roads to see road IDs.").color(GRAY));
+            return;
+        }
+
+        if (newName == null || newName.isEmpty()) {
+            playerData.sendMessage(Message.raw("You must provide a new name!").color(RED));
+            return;
+        }
+
+        TownRoad road = town.getRoad(roadId);
+        if (road == null) {
+            playerData.sendMessage(Message.raw("Road '" + roadId + "' not found!").color(RED));
+            playerData.sendMessage(Message.raw("Use /town roads to see available roads.").color(GRAY));
+            return;
+        }
+
+        String oldName = road.getDisplayName();
+        road.setName(newName);
+        road.regenerateNpcId(); // Update NPC ID to match new name
+        townStorage.saveTown(town);
+
+        playerData.sendMessage(Message.raw("Road renamed: " + oldName + " -> " + road.getDisplayName()).color(GREEN));
+        playerData.sendMessage(Message.raw("New NPC Controller: " + road.getNpcControllerName()).color(GRAY));
+    }
+
+    // ==================== BORDER VISUALIZATION COMMANDS ====================
+
+    /**
+     * Toggles town border visualization (Hytale selection tool style).
+     */
+    private void handleBorder(PlayerRef playerData, UUID playerId) {
+        boolean enabled = plugin.getBorderManager().toggleTownBorder(playerId);
+        if (enabled) {
+            playerData.sendMessage(Message.raw("Town borders: ON").color(GREEN));
+            playerData.sendMessage(Message.raw("You will see visual borders around your town claims.").color(GRAY));
+        } else {
+            playerData.sendMessage(Message.raw("Town borders: OFF").color(YELLOW));
+        }
+    }
+
+    /**
+     * Toggles chunk border visualization (shows all chunk boundaries).
+     */
+    private void handleChunkBorders(PlayerRef playerData, UUID playerId) {
+        boolean enabled = plugin.getBorderManager().toggleChunkBorders(playerId);
+        if (enabled) {
+            playerData.sendMessage(Message.raw("Chunk borders: ON").color(GREEN));
+            playerData.sendMessage(Message.raw("You will see visual borders at chunk boundaries.").color(GRAY));
+        } else {
+            playerData.sendMessage(Message.raw("Chunk borders: OFF").color(YELLOW));
+        }
+    }
+
     private void showHelp(PlayerRef playerData, boolean isAdmin) {
         playerData.sendMessage(Message.raw("========== TOWN COMMANDS ==========").color(GOLD));
         playerData.sendMessage(Message.raw("Use /town help for the full GUI help menu").color(GRAY));
@@ -1366,6 +1493,8 @@ public class TownCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("/town claim - Claim current chunk for town").color(WHITE));
         playerData.sendMessage(Message.raw("/town unclaim - Unclaim chunk (requires confirm)").color(WHITE));
         playerData.sendMessage(Message.raw("/town here - Show who owns current chunk").color(WHITE));
+        playerData.sendMessage(Message.raw("/town border - Toggle town border visualization").color(WHITE));
+        playerData.sendMessage(Message.raw("/town chunkborders - Toggle chunk boundary lines").color(WHITE));
 
         // Members
         playerData.sendMessage(Message.raw("--- Members ---").color(GOLD));
@@ -1405,6 +1534,16 @@ public class TownCommand extends AbstractPlayerCommand {
             playerData.sendMessage(Message.raw("/townadmin save - Force save all data").color(YELLOW));
             playerData.sendMessage(Message.raw("/townadmin debug - Show storage stats").color(YELLOW));
             playerData.sendMessage(Message.raw("/townadmin town <name> - View/manage town").color(YELLOW));
+            playerData.sendMessage(Message.raw("--- Admin Town Membership ---").color(GOLD));
+            playerData.sendMessage(Message.raw("/townadmin join <town> - Join any town").color(YELLOW));
+            playerData.sendMessage(Message.raw("/townadmin setmayor [town] [player] - Set mayor").color(YELLOW));
+            playerData.sendMessage(Message.raw("/townadmin leave - Leave current town").color(YELLOW));
+            playerData.sendMessage(Message.raw("/townadmin town <n> setnpcmayor <npc> - Set NPC mayor").color(YELLOW));
+            playerData.sendMessage(Message.raw("--- Admin Claiming ---").color(GOLD));
+            playerData.sendMessage(Message.raw("/town claimroad <dir> <name> - Claim 50k blocks as named road").color(YELLOW));
+            playerData.sendMessage(Message.raw("/town claimrect <size> - Claim NxN chunks").color(YELLOW));
+            playerData.sendMessage(Message.raw("/town roads - List all town roads").color(YELLOW));
+            playerData.sendMessage(Message.raw("/town nameroad <id> <name> - Rename a road").color(YELLOW));
             playerData.sendMessage(Message.raw("/townadmin town <n> delete - Force delete town").color(YELLOW));
             playerData.sendMessage(Message.raw("/townadmin town <n> setbalance <$> - Set balance").color(YELLOW));
             playerData.sendMessage(Message.raw("/townadmin wild toggle|sety|info - Wilderness").color(YELLOW));

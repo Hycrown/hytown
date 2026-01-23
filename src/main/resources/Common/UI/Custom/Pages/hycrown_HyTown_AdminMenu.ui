@@ -48,6 +48,11 @@ $C.@DecoratedContainer {
         Text: "Data";
         Anchor: (Left: 8);
       }
+
+      $C.@TextButton #ClaimTab {
+        Text: "Claiming";
+        Anchor: (Left: 8);
+      }
     }
 
     Group {
@@ -534,6 +539,140 @@ $C.@DecoratedContainer {
         $C.@TextButton #BackupBtn {
           Text: "Create Backup";
           Anchor: (Left: 8);
+        }
+      }
+    }
+
+    Group #ClaimPanel {
+      LayoutMode: Top;
+      Anchor: (Bottom: 12);
+
+      Label {
+        Text: "Admin Claiming";
+        Style: (...$C.@DefaultLabelStyle, RenderBold: true, RenderUppercase: true);
+        Anchor: (Bottom: 12);
+      }
+
+      Label {
+        Text: "Use these commands in chat to claim land for your town.";
+        Style: (...$C.@DefaultLabelStyle, TextColor: #888888);
+        Anchor: (Bottom: 12);
+      }
+
+      Group {
+        Anchor: (Vertical: 4, Height: 1);
+        Background: #5e512c;
+      }
+
+      Label {
+        Text: "Claim Road";
+        Style: (...$C.@DefaultLabelStyle, RenderBold: true);
+        Anchor: (Bottom: 4, Top: 8);
+      }
+
+      Label #ClaimRoadCmd {
+        Text: "/townadmin claimroad <dir> <name>";
+        Style: (...$C.@DefaultLabelStyle, TextColor: #55ff55);
+        Anchor: (Bottom: 4);
+      }
+
+      Label {
+        Text: "Claims 50,000 blocks in direction (north/south/east/west/all).";
+        Style: (...$C.@DefaultLabelStyle, TextColor: #888888);
+        Anchor: (Bottom: 4);
+      }
+
+      Label {
+        Text: "Creates NPC-controlled road. Skips existing claims.";
+        Style: (...$C.@DefaultLabelStyle, TextColor: #888888);
+        Anchor: (Bottom: 12);
+      }
+
+      Group {
+        Anchor: (Vertical: 4, Height: 1);
+        Background: #5e512c;
+      }
+
+      Label {
+        Text: "Claim Rectangle";
+        Style: (...$C.@DefaultLabelStyle, RenderBold: true);
+        Anchor: (Bottom: 4, Top: 8);
+      }
+
+      Label #ClaimRectCmd {
+        Text: "/townadmin claimrect <size>";
+        Style: (...$C.@DefaultLabelStyle, TextColor: #55ff55);
+        Anchor: (Bottom: 4);
+      }
+
+      Label {
+        Text: "Claims NxN area (size 5 = 11x11 = 121 chunks).";
+        Style: (...$C.@DefaultLabelStyle, TextColor: #888888);
+        Anchor: (Bottom: 4);
+      }
+
+      Label {
+        Text: "Must stand in town territory. Can take road claims.";
+        Style: (...$C.@DefaultLabelStyle, TextColor: #888888);
+        Anchor: (Bottom: 12);
+      }
+
+      Group {
+        Anchor: (Vertical: 4, Height: 1);
+        Background: #5e512c;
+      }
+
+      Label {
+        Text: "Current Town Info";
+        Style: (...$C.@DefaultLabelStyle, RenderBold: true);
+        Anchor: (Bottom: 8, Top: 8);
+      }
+
+      Group {
+        LayoutMode: Left;
+        Anchor: (Bottom: 4);
+
+        Label {
+          Text: "Your Town:";
+          Style: $C.@DefaultLabelStyle;
+          Anchor: (Width: 150);
+        }
+
+        Label #CurrentTownName {
+          Text: "None";
+          Style: (...$C.@DefaultLabelStyle, TextColor: #55ff55);
+        }
+      }
+
+      Group {
+        LayoutMode: Left;
+        Anchor: (Bottom: 4);
+
+        Label {
+          Text: "Town Claims:";
+          Style: $C.@DefaultLabelStyle;
+          Anchor: (Width: 150);
+        }
+
+        Label #CurrentTownClaims {
+          Text: "0";
+          Style: (...$C.@DefaultLabelStyle, TextColor: #55ff55);
+        }
+      }
+
+      Group {
+        LayoutMode: Left;
+        Anchor: (Bottom: 4);
+
+        Label {
+          Text: "Town Roads:";
+          Style: $C.@DefaultLabelStyle;
+          Anchor: (Width: 150);
+        }
+
+        Label #CurrentTownRoads {
+          Text: "0";
+          Style: (...$C.@DefaultLabelStyle, TextColor: #55ff55);
         }
       }
     }

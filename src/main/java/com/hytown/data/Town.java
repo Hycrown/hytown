@@ -15,6 +15,7 @@ public class Town {
     private Set<UUID> residents = new HashSet<>();
     private Map<UUID, String> residentNames = new HashMap<>();  // UUID -> name
     private Set<String> claimKeys = new HashSet<>();  // "world:chunkX,chunkZ"
+    private Map<String, TownRoad> roads = new HashMap<>();  // roadId -> TownRoad
     private TownSettings settings = new TownSettings();
     private double balance = 0.0;
     private long createdAt;
@@ -252,6 +253,94 @@ public class Town {
         }
 
         return false;
+    }
+
+    // ==================== ROADS ====================
+
+    /**
+     * Add a road to this town.
+     * @param roadId Unique identifier for the road (e.g., "north_mainroad")
+     * @param road The road data
+     */
+    public void addRoad(String roadId, TownRoad road) {
+        roads.put(roadId, road);
+    }
+
+    /**
+     * Get a road by its ID.
+     */
+    public TownRoad getRoad(String roadId) {
+        return roads.get(roadId);
+    }
+
+    /**
+     * Get all roads in this town.
+     */
+    public Map<String, TownRoad> getRoads() {
+        return new HashMap<>(roads);
+    }
+
+    /**
+     * Remove a road from this town.
+     */
+    public TownRoad removeRoad(String roadId) {
+        return roads.remove(roadId);
+    }
+
+    /**
+     * Check if a claim belongs to any road.
+     * @return The road that owns this claim, or null if not a road claim
+     */
+    public TownRoad getRoadByClaim(String claimKey) {
+        for (TownRoad road : roads.values()) {
+            if (road.containsClaim(claimKey)) {
+                return road;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get the total number of road chunks in this town.
+     */
+    public int getTotalRoadChunks() {
+        int total = 0;
+        for (TownRoad road : roads.values()) {
+            total += road.getChunkCount();
+        }
+        return total;
+    }
+
+    /**
+     * Remove a claim from any road that contains it.
+     * Used when admins claim over road chunks.
+     * @param claimKey The claim key to remove
+     * @return true if the claim was removed from a road, false if not found in any road
+     */
+    public boolean removeClaimFromRoad(String claimKey) {
+        for (TownRoad road : roads.values()) {
+            if (road.containsClaim(claimKey)) {
+                road.getClaimKeys().remove(claimKey);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if a claim is a road claim.
+     * @param claimKey The claim key to check
+     * @return true if this claim belongs to a road
+     */
+    public boolean isRoadClaim(String claimKey) {
+        return getRoadByClaim(claimKey) != null;
+    }
+
+    /**
+     * Generate a unique road ID from direction and name.
+     */
+    public static String generateRoadId(String direction, String name) {
+        return direction.toLowerCase() + "_" + name.toLowerCase().replaceAll("\\s+", "_");
     }
 
     // ==================== PLOTS ====================
@@ -595,6 +684,7 @@ public class Town {
     public void setResidents(Set<UUID> residents) { this.residents = residents; }
     public void setResidentNames(Map<UUID, String> residentNames) { this.residentNames = residentNames; }
     public void setClaimKeys(Set<String> claimKeys) { this.claimKeys = claimKeys; }
+    public void setRoads(Map<String, TownRoad> roads) { this.roads = roads != null ? roads : new HashMap<>(); }
     public void setCreatedAt(long createdAt) { this.createdAt = createdAt; }
     public void setLastUpkeepTime(long lastUpkeepTime) { this.lastUpkeepTime = lastUpkeepTime; }
     public void setMissedUpkeepDays(int missedUpkeepDays) { this.missedUpkeepDays = missedUpkeepDays; }

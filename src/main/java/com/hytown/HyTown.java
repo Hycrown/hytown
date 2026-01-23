@@ -24,6 +24,7 @@ import com.hytown.storage.MongoStorage;
 import com.hytown.listeners.ClaimProtectionListener;
 import com.hytown.managers.ClaimManager;
 import com.hytown.managers.PlaytimeManager;
+import com.hytown.managers.TownBorderManager;
 import com.hytown.map.ClaimMapOverlayProvider;
 import com.hytown.map.HyTownWorldMapProvider;
 import com.hytown.systems.BlockBreakProtectionSystem;
@@ -31,6 +32,7 @@ import com.hytown.systems.BlockDamageProtectionSystem;
 import com.hytown.systems.BlockPlaceProtectionSystem;
 import com.hytown.systems.BlockUseProtectionSystem;
 import com.hytown.systems.ClaimTitleSystem;
+import com.hytown.systems.TownBorderRenderSystem;
 import com.hytown.systems.TownCreatureDespawnSystem;
 import com.hytown.systems.WildernessHarvestSystem;
 import com.hypixel.hytale.server.core.event.events.player.PlayerConnectEvent;
@@ -81,7 +83,9 @@ public class HyTown extends JavaPlugin {
     private ClaimProtectionListener protectionListener;
     private ClaimMapOverlayProvider mapOverlayProvider;
     private ClaimTitleSystem claimTitleSystem;
+    private TownBorderRenderSystem borderRenderSystem;
     private com.hytown.managers.UpkeepManager upkeepManager;
+    private TownBorderManager borderManager;
     private HyTownAPI api;
     private TownEventBus eventBus;
 
@@ -132,6 +136,7 @@ public class HyTown extends JavaPlugin {
         claimManager = new ClaimManager(claimStorage, playtimeStorage, config, blockGroups);
         playtimeManager = new PlaytimeManager(playtimeStorage, config);
         upkeepManager = new com.hytown.managers.UpkeepManager(config, townStorage, getLogger());
+        borderManager = new TownBorderManager();
 
         // Initialize the event bus for other plugins to listen to town events
         eventBus = new TownEventBus();
@@ -198,6 +203,11 @@ public class HyTown extends JavaPlugin {
             // Register creature despawn system (prevents mob spawns in towns)
             getLogger().atSevere().log("[DEBUG] Registering TownCreatureDespawnSystem...");
             getEntityStoreRegistry().registerSystem(new TownCreatureDespawnSystem(claimManager, getLogger()));
+
+            // Register border render system (shows visual borders for /town border and /town chunkborders)
+            getLogger().atSevere().log("[DEBUG] Registering TownBorderRenderSystem...");
+            borderRenderSystem = new TownBorderRenderSystem(borderManager, townStorage);
+            getEntityStoreRegistry().registerSystem(borderRenderSystem);
 
             getLogger().atSevere().log("[DEBUG] All ECS systems registered successfully!");
         } catch (Exception e) {
@@ -553,6 +563,14 @@ public class HyTown extends JavaPlugin {
                     claimTitleSystem.removePlayer(playerId);
                 }
 
+                // Clear border visualization state
+                if (borderManager != null) {
+                    borderManager.disableAll(playerId);
+                }
+                if (borderRenderSystem != null) {
+                    borderRenderSystem.removePlayer(playerId);
+                }
+
                 getLogger().atFine().log("Player disconnected: %s", playerId);
             }
         } catch (Exception e) {
@@ -637,6 +655,13 @@ public class HyTown extends JavaPlugin {
      */
     public TownStorage getTownStorage() {
         return townStorage;
+    }
+
+    /**
+     * Gets the border manager for town/chunk border visualization.
+     */
+    public TownBorderManager getBorderManager() {
+        return borderManager;
     }
 
     // ==================== STORAGE PROVIDER FACTORY ====================
@@ -885,22 +910,7 @@ public class HyTown extends JavaPlugin {
             }
         }
 
-        // Claim the chunk
-        ClaimManager.ClaimResult claimResult = claimManager.claimChunk(playerId, worldName, blockX, blockZ);
-        if (claimResult != ClaimManager.ClaimResult.SUCCESS) {
-            // Refund if claim failed
-            if (cost > 0) {
-                com.hycrown.hyconomy.HyConomy.deposit(playerName, cost);
-            }
-            String reason = switch (claimResult) {
-                case ALREADY_OWN -> "You already own this chunk personally";
-                case CLAIMED_BY_OTHER -> "Chunk is claimed by someone else";
-                case LIMIT_REACHED -> "Claim limit reached";
-                case TOO_CLOSE_TO_OTHER_CLAIM -> "Too close to another claim";
-                default -> "Unknown error";
-            };
-            return TownCreationResult.error("Failed to claim chunk: " + reason);
-        }
+        // Town creation does not use personal claim limits - just create town claim directly
 
         // Create the town
         Town town = new Town(townName, playerId, playerName);
