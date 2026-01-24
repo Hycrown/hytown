@@ -875,7 +875,7 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("  Claim current chunk for town (free, no limits)").color(GRAY));
         playerData.sendMessage(Message.raw("/townadmin unclaim").color(WHITE));
         playerData.sendMessage(Message.raw("  Force unclaim current chunk from any town").color(GRAY));
-        playerData.sendMessage(Message.raw("/townadmin roadclaim [townname]").color(WHITE));
+        playerData.sendMessage(Message.raw("/townadmin roadclaim <townname>").color(WHITE));
         playerData.sendMessage(Message.raw("  Claim current chunk as ROAD for town (gets speed boost)").color(GRAY));
         playerData.sendMessage(Message.raw("/townadmin claimroad <dir> <name>").color(WHITE));
         playerData.sendMessage(Message.raw("  Claim road 50k blocks in direction (n/s/e/w/all)").color(GRAY));
@@ -1539,22 +1539,18 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
                                        PlayerRef playerData, World world, String townName) {
         TownStorage townStorage = plugin.getTownStorage();
 
-        // Get target town
-        Town town;
+        // Require town name
         if (townName == null || townName.isEmpty()) {
-            // Use admin's current town
-            town = townStorage.getPlayerTown(playerData.getUuid());
-            if (town == null) {
-                playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin roadclaim <townname>").color(YELLOW));
-                playerData.sendMessage(Message.raw("  Or join a town first with /townadmin join <town>").color(GRAY));
-                return;
-            }
-        } else {
-            town = townStorage.getTown(townName);
-            if (town == null) {
-                playerData.sendMessage(Message.raw("[ADMIN] Town '" + townName + "' not found!").color(RED));
-                return;
-            }
+            playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin roadclaim <townname>").color(YELLOW));
+            playerData.sendMessage(Message.raw("  Claims current chunk as ROAD for the specified town").color(GRAY));
+            playerData.sendMessage(Message.raw("  Road claims get speed boost applied").color(GRAY));
+            return;
+        }
+
+        Town town = townStorage.getTown(townName);
+        if (town == null) {
+            playerData.sendMessage(Message.raw("[ADMIN] Town '" + townName + "' not found!").color(RED));
+            return;
         }
 
         // Get player position
