@@ -875,8 +875,8 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("  Claim current chunk for town (free, no limits)").color(GRAY));
         playerData.sendMessage(Message.raw("/townadmin unclaim").color(WHITE));
         playerData.sendMessage(Message.raw("  Force unclaim current chunk from any town").color(GRAY));
-        playerData.sendMessage(Message.raw("/townadmin roadclaim [roadname]").color(WHITE));
-        playerData.sendMessage(Message.raw("  Claim current chunk as ROAD (gets speed boost)").color(GRAY));
+        playerData.sendMessage(Message.raw("/townadmin roadclaim [townname]").color(WHITE));
+        playerData.sendMessage(Message.raw("  Claim current chunk as ROAD for town (gets speed boost)").color(GRAY));
         playerData.sendMessage(Message.raw("/townadmin claimroad <dir> <name>").color(WHITE));
         playerData.sendMessage(Message.raw("  Claim road 50k blocks in direction (n/s/e/w/all)").color(GRAY));
         playerData.sendMessage(Message.raw("/townadmin claimrect <size>").color(WHITE));
@@ -1530,21 +1530,31 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
 
     /**
      * Admin claims the current chunk as a ROAD claim for a town.
-     * Usage: /townadmin roadclaim [roadname]
-     * - If roadname specified, adds to that road (creates if doesn't exist)
-     * - Uses admin's current town
+     * Usage: /townadmin roadclaim [townname]
+     * - If townname specified, claims for that town
+     * - If not specified, uses admin's current town
      * Road claims get speed boost applied.
      */
     private void handleAdminRoadClaim(Store<EntityStore> store, Ref<EntityStore> playerRef,
-                                       PlayerRef playerData, World world, String roadName) {
+                                       PlayerRef playerData, World world, String townName) {
         TownStorage townStorage = plugin.getTownStorage();
 
-        // Get admin's current town
-        Town town = townStorage.getPlayerTown(playerData.getUuid());
-        if (town == null) {
-            playerData.sendMessage(Message.raw("[ADMIN] You must be in a town!").color(RED));
-            playerData.sendMessage(Message.raw("  Use /townadmin join <town> first").color(GRAY));
-            return;
+        // Get target town
+        Town town;
+        if (townName == null || townName.isEmpty()) {
+            // Use admin's current town
+            town = townStorage.getPlayerTown(playerData.getUuid());
+            if (town == null) {
+                playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin roadclaim <townname>").color(YELLOW));
+                playerData.sendMessage(Message.raw("  Or join a town first with /townadmin join <town>").color(GRAY));
+                return;
+            }
+        } else {
+            town = townStorage.getTown(townName);
+            if (town == null) {
+                playerData.sendMessage(Message.raw("[ADMIN] Town '" + townName + "' not found!").color(RED));
+                return;
+            }
         }
 
         // Get player position
@@ -1576,10 +1586,8 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
             return;
         }
 
-        // Default road name if not specified
-        if (roadName == null || roadName.isEmpty()) {
-            roadName = "Road";
-        }
+        // Use town name as road name
+        String roadName = town.getName() + "Road";
 
         // Get or create road
         String roadId = Town.generateRoadId("misc", roadName);
