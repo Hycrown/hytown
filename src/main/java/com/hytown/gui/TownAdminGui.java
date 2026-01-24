@@ -347,6 +347,111 @@ case "set_road_speed" -> {
                     }
                 }
             }
+
+            // Admin Claim/Unclaim Actions
+            case "admin_claim" -> {
+                // Get town name from input field
+                String townName = inputValue.trim();
+                if (townName.isEmpty()) {
+                    // Try using admin's current town
+                    Town myTown = plugin.getTownStorage().getPlayerTown(playerId);
+                    if (myTown == null) {
+                        statusMessage = "Enter town name in text field!";
+                        statusIsError = true;
+                    } else {
+                        townName = myTown.getName();
+                    }
+                }
+
+                if (!townName.isEmpty()) {
+                    Town town = plugin.getTownStorage().getTown(townName);
+                    if (town == null) {
+                        statusMessage = "Town '" + townName + "' not found!";
+                        statusIsError = true;
+                    } else {
+                        // Get player position from world
+                        var players = world.getPlayers();
+                        Player adminPlayer = null;
+                        for (var p : players) {
+                            if (p.getUuid().equals(playerId)) {
+                                adminPlayer = p;
+                                break;
+                            }
+                        }
+
+                        if (adminPlayer == null) {
+                            statusMessage = "Could not find your position!";
+                            statusIsError = true;
+                        } else {
+                            var pos = adminPlayer.getTransformComponent().getPosition();
+                            int chunkX = com.hytown.util.ChunkUtil.toChunkX(pos.getX());
+                            int chunkZ = com.hytown.util.ChunkUtil.toChunkZ(pos.getZ());
+                            String worldName = world.getName();
+                            String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+                            // Check if already claimed
+                            if (town.ownsClaim(claimKey)) {
+                                statusMessage = "Already claimed by " + town.getName();
+                                statusIsError = true;
+                            } else {
+                                Town existingTown = plugin.getTownStorage().getTownByClaimKey(claimKey);
+                                if (existingTown != null) {
+                                    statusMessage = "Claimed by: " + existingTown.getName();
+                                    statusIsError = true;
+                                } else {
+                                    // Claim it
+                                    town.addClaim(claimKey);
+                                    plugin.getTownStorage().indexClaim(claimKey, town.getName());
+                                    plugin.getTownStorage().saveTown(town);
+                                    plugin.refreshWorldMapChunk(worldName, chunkX, chunkZ);
+                                    statusMessage = "Claimed [" + chunkX + "," + chunkZ + "] for " + town.getName();
+                                    statusIsError = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            case "admin_unclaim" -> {
+                // Get player position
+                var players = world.getPlayers();
+                Player adminPlayer = null;
+                for (var p : players) {
+                    if (p.getUuid().equals(playerId)) {
+                        adminPlayer = p;
+                        break;
+                    }
+                }
+
+                if (adminPlayer == null) {
+                    statusMessage = "Could not find your position!";
+                    statusIsError = true;
+                } else {
+                    var pos = adminPlayer.getTransformComponent().getPosition();
+                    int chunkX = com.hytown.util.ChunkUtil.toChunkX(pos.getX());
+                    int chunkZ = com.hytown.util.ChunkUtil.toChunkZ(pos.getZ());
+                    String worldName = world.getName();
+                    String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+                    Town town = plugin.getTownStorage().getTownByClaimKey(claimKey);
+                    if (town == null) {
+                        statusMessage = "Chunk not claimed by any town";
+                        statusIsError = true;
+                    } else {
+                        String townName = town.getName();
+                        boolean wasRoad = town.isRoadClaim(claimKey);
+                        if (wasRoad) {
+                            town.removeClaimFromRoad(claimKey);
+                        }
+                        town.removeClaim(claimKey);
+                        plugin.getTownStorage().unindexClaim(claimKey);
+                        plugin.getTownStorage().saveTown(town);
+                        plugin.refreshWorldMapChunk(worldName, chunkX, chunkZ);
+                        statusMessage = "Unclaimed [" + chunkX + "," + chunkZ + "] from " + townName + (wasRoad ? " (road)" : "");
+                        statusIsError = false;
+                    }
+                }
+            }
         }
 
         // Save config after any setting change
@@ -522,6 +627,54 @@ cmd.set("#RoadSpeedValue.Text", String.format("%.1fx", config.getRoadSpeedMultip
             cmd.set("#CurrentTownClaims.Text", "-");
             cmd.set("#CurrentTownRoads.Text", "-");
         }
+
+        // Get current chunk info
+        var players = world.getPlayers();
+        Player adminPlayer = null;
+        for (var p : players) {
+            if (p.getUuid().equals(playerId)) {
+                adminPlayer = p;
+                break;
+            }
+        }
+
+        if (adminPlayer != null) {
+            var pos = adminPlayer.getTransformComponent().getPosition();
+            int chunkX = com.hytown.util.ChunkUtil.toChunkX(pos.getX());
+            int chunkZ = com.hytown.util.ChunkUtil.toChunkZ(pos.getZ());
+            String worldName = world.getName();
+            String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+            cmd.set("#CurrentChunkInfo.Text", "[" + chunkX + ", " + chunkZ + "]");
+
+            // Check who owns this chunk
+            Town chunkOwner = plugin.getTownStorage().getTownByClaimKey(claimKey);
+            if (chunkOwner != null) {
+                boolean isRoad = chunkOwner.isRoadClaim(claimKey);
+                cmd.set("#ChunkOwnerInfo.Text", chunkOwner.getName() + (isRoad ? " (Road)" : ""));
+                cmd.set("#ChunkOwnerInfo.Style.TextColor", "#ffaa00");
+            } else {
+                // Check for personal claim
+                java.util.UUID personalOwner = plugin.getClaimManager().getOwnerAt(worldName, pos.getX(), pos.getZ());
+                if (personalOwner != null) {
+                    String ownerName = plugin.getClaimStorage().getPlayerName(personalOwner);
+                    cmd.set("#ChunkOwnerInfo.Text", "Personal: " + ownerName);
+                    cmd.set("#ChunkOwnerInfo.Style.TextColor", "#5555ff");
+                } else {
+                    cmd.set("#ChunkOwnerInfo.Text", "Unclaimed");
+                    cmd.set("#ChunkOwnerInfo.Style.TextColor", "#888888");
+                }
+            }
+        } else {
+            cmd.set("#CurrentChunkInfo.Text", "Unknown");
+            cmd.set("#ChunkOwnerInfo.Text", "Unknown");
+        }
+
+        // Bind claim/unclaim buttons
+        evt.addEventBinding(CustomUIEventBindingType.Activating, "#AdminClaimBtn",
+                EventData.of("Action", "admin_claim"), false);
+        evt.addEventBinding(CustomUIEventBindingType.Activating, "#AdminUnclaimBtn",
+                EventData.of("Action", "admin_unclaim"), false);
     }
 
     /**

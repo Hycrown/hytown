@@ -676,6 +676,69 @@ Group {        LayoutMode: Left;        Anchor: (Bottom: 8);        Label {     
           Style: (...$C.@DefaultLabelStyle, TextColor: #55ff55);
         }
       }
+
+      Group {
+        Anchor: (Vertical: 8, Height: 1);
+        Background: #5e512c;
+      }
+
+      Label {
+        Text: "Quick Claim/Unclaim";
+        Style: (...$C.@DefaultLabelStyle, RenderBold: true);
+        Anchor: (Bottom: 8, Top: 8);
+      }
+
+      Label {
+        Text: "Enter town name in text field above, then click Claim.";
+        Style: (...$C.@DefaultLabelStyle, TextColor: #888888);
+        Anchor: (Bottom: 8);
+      }
+
+      Group {
+        LayoutMode: Left;
+        Anchor: (Bottom: 4);
+
+        Label {
+          Text: "Current Chunk:";
+          Style: $C.@DefaultLabelStyle;
+          Anchor: (Width: 150);
+        }
+
+        Label #CurrentChunkInfo {
+          Text: "[0, 0]";
+          Style: (...$C.@DefaultLabelStyle, TextColor: #ffaa00);
+        }
+      }
+
+      Group {
+        LayoutMode: Left;
+        Anchor: (Bottom: 4);
+
+        Label {
+          Text: "Chunk Owner:";
+          Style: $C.@DefaultLabelStyle;
+          Anchor: (Width: 150);
+        }
+
+        Label #ChunkOwnerInfo {
+          Text: "Unclaimed";
+          Style: (...$C.@DefaultLabelStyle, TextColor: #888888);
+        }
+      }
+
+      Group {
+        LayoutMode: Left;
+        Anchor: (Bottom: 8, Top: 8);
+
+        $C.@TextButton #AdminClaimBtn {
+          Text: "Claim Chunk";
+        }
+
+        $C.@TextButton #AdminUnclaimBtn {
+          Text: "Unclaim Chunk";
+          Anchor: (Left: 12);
+        }
+      }
     }
 
     Group {
