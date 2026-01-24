@@ -154,6 +154,11 @@ public class PluginConfig {
     public int getTownUpkeepHour() {
         return config.townUpkeepHour;
     }
+// ===== ROAD GETTERS =====
+
+    public double getRoadSpeedMultiplier() {
+        return config.roadSpeedMultiplier;
+    }
 
     // ===== WILD PROTECTION GETTERS =====
 
@@ -247,6 +252,12 @@ public class PluginConfig {
 
     public void setTownUpkeepHour(int value) {
         config.townUpkeepHour = Math.max(0, Math.min(23, value));
+        save();
+    }
+// ===== ROAD SETTERS =====
+
+    public void setRoadSpeedMultiplier(double value) {
+        config.roadSpeedMultiplier = Math.max(1.0, value);
         save();
     }
 
@@ -346,6 +357,8 @@ public class PluginConfig {
         double townUpkeepBase = 100.0;       // Base daily upkeep for having a town
         double townUpkeepPerClaim = 50.0;    // Upkeep per claimed chunk (50/day/plot)
         int townUpkeepHour = 12;             // Hour of day (0-23) when upkeep is collected
+// Road settings
+        double roadSpeedMultiplier = 3.0;  // Speed multiplier when on a road (3.0 = 3x speed)
 
         // Wild protection settings
         boolean wildProtectionEnabled = true;

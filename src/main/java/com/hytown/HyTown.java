@@ -32,6 +32,7 @@ import com.hytown.systems.BlockDamageProtectionSystem;
 import com.hytown.systems.BlockPlaceProtectionSystem;
 import com.hytown.systems.BlockUseProtectionSystem;
 import com.hytown.systems.ClaimTitleSystem;
+import com.hytown.systems.RoadSpeedSystem;
 import com.hytown.systems.TownBorderRenderSystem;
 import com.hytown.systems.TownCreatureDespawnSystem;
 import com.hytown.systems.WildernessHarvestSystem;
@@ -84,6 +85,7 @@ public class HyTown extends JavaPlugin {
     private ClaimMapOverlayProvider mapOverlayProvider;
     private ClaimTitleSystem claimTitleSystem;
     private TownBorderRenderSystem borderRenderSystem;
+    private RoadSpeedSystem roadSpeedSystem;
     private com.hytown.managers.UpkeepManager upkeepManager;
     private TownBorderManager borderManager;
     private HyTownAPI api;
@@ -206,8 +208,12 @@ public class HyTown extends JavaPlugin {
 
             // Register border render system (shows visual borders for /town border and /town chunkborders)
             getLogger().atSevere().log("[DEBUG] Registering TownBorderRenderSystem...");
-            borderRenderSystem = new TownBorderRenderSystem(borderManager, townStorage);
+            borderRenderSystem = new TownBorderRenderSystem(borderManager, townStorage, claimStorage);
             getEntityStoreRegistry().registerSystem(borderRenderSystem);
+// Register road speed system (applies speed boost on roads)
+            getLogger().atSevere().log("[DEBUG] Registering RoadSpeedSystem...");
+            roadSpeedSystem = new RoadSpeedSystem(townStorage, config);
+            getEntityStoreRegistry().registerSystem(roadSpeedSystem);
 
             getLogger().atSevere().log("[DEBUG] All ECS systems registered successfully!");
         } catch (Exception e) {
@@ -569,6 +575,9 @@ public class HyTown extends JavaPlugin {
                 }
                 if (borderRenderSystem != null) {
                     borderRenderSystem.removePlayer(playerId);
+}
+                if (roadSpeedSystem != null) {
+                    roadSpeedSystem.removePlayer(playerId);
                 }
 
                 getLogger().atFine().log("Player disconnected: %s", playerId);

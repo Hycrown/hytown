@@ -1,5 +1,7 @@
 package com.hytown.systems;
 
+import com.hytown.data.ClaimStorage;
+import com.hytown.data.PlayerClaims;
 import com.hytown.data.Town;
 import com.hytown.data.TownStorage;
 import com.hytown.managers.TownBorderManager;
@@ -42,17 +44,19 @@ public class TownBorderRenderSystem extends EntityTickingSystem<EntityStore> {
 
     private final TownBorderManager borderManager;
     private final TownStorage townStorage;
+    private final ClaimStorage claimStorage;
 
     // Track last rendered position/state to avoid redundant packets
     private final Map<UUID, LastRenderState> lastRenderState = new ConcurrentHashMap<>();
     private int tickCounter = 0;
 
-    public TownBorderRenderSystem(TownBorderManager borderManager, TownStorage townStorage) {
+    public TownBorderRenderSystem(TownBorderManager borderManager, TownStorage townStorage, ClaimStorage claimStorage) {
         this.borderManager = borderManager;
         this.townStorage = townStorage;
+        this.claimStorage = claimStorage;
     }
 
-    private record LastRenderState(int chunkX, int chunkZ, boolean chunkBorders, boolean townBorders, String townName) {}
+    private record LastRenderState(int chunkX, int chunkZ, boolean chunkBorders, boolean townBorders, boolean plotBorders, String townName, int plotCount) {}
 
     @Override
     public void tick(float deltaTime, int index, ArchetypeChunk<EntityStore> archetypeChunk,
@@ -73,11 +77,12 @@ public class TownBorderRenderSystem extends EntityTickingSystem<EntityStore> {
         UUID playerId = playerRef.getUuid();
         boolean chunkBordersEnabled = borderManager.isChunkBorderEnabled(playerId);
         boolean townBordersEnabled = borderManager.isTownBorderEnabled(playerId);
+        boolean plotBordersEnabled = borderManager.isPlotBorderEnabled(playerId);
 
         // If neither enabled, clear any existing visualization
-        if (!chunkBordersEnabled && !townBordersEnabled) {
+        if (!chunkBordersEnabled && !townBordersEnabled && !plotBordersEnabled) {
             LastRenderState last = lastRenderState.remove(playerId);
-            if (last != null && (last.chunkBorders || last.townBorders)) {
+            if (last != null && (last.chunkBorders || last.townBorders || last.plotBorders)) {
                 clearVisualization(playerRef);
             }
             return;
@@ -93,6 +98,8 @@ public class TownBorderRenderSystem extends EntityTickingSystem<EntityStore> {
         // Get player's town (if any) for town borders
         Town town = townStorage.getPlayerTown(playerId);
         String townName = town != null ? town.getName() : null;
+        PlayerClaims playerClaims = claimStorage.getPlayerClaims(playerId);
+        int plotCount = playerClaims != null ? playerClaims.getClaimCount() : 0;
 
         // Check if state changed
         LastRenderState last = lastRenderState.get(playerId);
@@ -101,18 +108,22 @@ public class TownBorderRenderSystem extends EntityTickingSystem<EntityStore> {
                 last.chunkZ != chunkZ ||
                 last.chunkBorders != chunkBordersEnabled ||
                 last.townBorders != townBordersEnabled ||
-                !java.util.Objects.equals(last.townName, townName);
+                last.plotBorders != plotBordersEnabled ||
+                !java.util.Objects.equals(last.townName, townName) ||
+                last.plotCount != plotCount;
 
         if (!stateChanged) {
             return; // No change, don't send packet
         }
 
         // Update last state
-        lastRenderState.put(playerId, new LastRenderState(chunkX, chunkZ, chunkBordersEnabled, townBordersEnabled, townName));
+        lastRenderState.put(playerId, new LastRenderState(chunkX, chunkZ, chunkBordersEnabled, townBordersEnabled, plotBordersEnabled, townName, plotCount));
 
         // Determine what to render
-        // Priority: Town borders > Chunk borders (can only show one selection at a time)
-        if (townBordersEnabled && town != null) {
+        // Priority: Plot borders > Town borders > Chunk borders
+        if (plotBordersEnabled && playerClaims != null && plotCount > 0) {
+            renderPlotBorders(playerRef, playerClaims, worldName);
+        } else if (townBordersEnabled && town != null) {
             renderTownBorders(playerRef, town, worldName);
         } else if (chunkBordersEnabled) {
             renderChunkBorders(playerRef, chunkX, chunkZ);
@@ -177,6 +188,42 @@ public class TownBorderRenderSystem extends EntityTickingSystem<EntityStore> {
     /**
      * Sends a BuilderToolSelectionUpdate packet to show the selection box.
      */
+
+    /**
+     * Renders the bounding box of all personal claims for a player in the current world.
+     */
+    private void renderPlotBorders(PlayerRef playerRef, PlayerClaims playerClaims, String worldName) {
+        int minChunkX = Integer.MAX_VALUE;
+        int maxChunkX = Integer.MIN_VALUE;
+        int minChunkZ = Integer.MAX_VALUE;
+        int maxChunkZ = Integer.MIN_VALUE;
+        int claimCount = 0;
+
+        for (var claim : playerClaims.getClaims()) {
+            if (!claim.getWorld().equals(worldName)) {
+                continue;
+            }
+            int cx = claim.getChunkX();
+            int cz = claim.getChunkZ();
+            minChunkX = Math.min(minChunkX, cx);
+            maxChunkX = Math.max(maxChunkX, cx);
+            minChunkZ = Math.min(minChunkZ, cz);
+            maxChunkZ = Math.max(maxChunkZ, cz);
+            claimCount++;
+        }
+
+        if (claimCount == 0) {
+            clearVisualization(playerRef);
+            return;
+        }
+
+        int minX = minChunkX * CHUNK_SIZE;
+        int maxX = maxChunkX * CHUNK_SIZE + CHUNK_SIZE - 1;
+        int minZ = minChunkZ * CHUNK_SIZE;
+        int maxZ = maxChunkZ * CHUNK_SIZE + CHUNK_SIZE - 1;
+        sendSelectionPacket(playerRef, minX, MIN_Y, minZ, maxX, MAX_Y, maxZ);
+    }
+
     private void sendSelectionPacket(PlayerRef playerRef, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         try {
             BuilderToolSelectionUpdate packet = new BuilderToolSelectionUpdate(

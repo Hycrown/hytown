@@ -5,7 +5,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Manages town and chunk border visualization toggles for players.
+ * Manages town, chunk, and plot border visualization toggles for players.
  *
  * This manager tracks which players have border visualization enabled.
  * The actual rendering is handled by TownBorderRenderSystem.
@@ -17,6 +17,9 @@ public class TownBorderManager {
 
     // Players who have chunk border visualization enabled
     private final Set<UUID> chunkBorderEnabled = ConcurrentHashMap.newKeySet();
+
+    // Players who have plot (personal claim) border visualization enabled
+    private final Set<UUID> plotBorderEnabled = ConcurrentHashMap.newKeySet();
 
     /**
      * Toggles town border visualization for a player.
@@ -47,6 +50,20 @@ public class TownBorderManager {
     }
 
     /**
+     * Toggles plot (personal claim) border visualization for a player.
+     * @return true if now enabled, false if disabled
+     */
+    public boolean togglePlotBorder(UUID playerId) {
+        if (plotBorderEnabled.contains(playerId)) {
+            plotBorderEnabled.remove(playerId);
+            return false;
+        } else {
+            plotBorderEnabled.add(playerId);
+            return true;
+        }
+    }
+
+    /**
      * Checks if town borders are enabled for a player.
      */
     public boolean isTownBorderEnabled(UUID playerId) {
@@ -58,6 +75,13 @@ public class TownBorderManager {
      */
     public boolean isChunkBorderEnabled(UUID playerId) {
         return chunkBorderEnabled.contains(playerId);
+    }
+
+    /**
+     * Checks if plot borders are enabled for a player.
+     */
+    public boolean isPlotBorderEnabled(UUID playerId) {
+        return plotBorderEnabled.contains(playerId);
     }
 
     /**
@@ -89,11 +113,26 @@ public class TownBorderManager {
     }
 
     /**
+     * Enables plot border for a player.
+     */
+    public void enablePlotBorder(UUID playerId) {
+        plotBorderEnabled.add(playerId);
+    }
+
+    /**
+     * Disables plot border for a player.
+     */
+    public void disablePlotBorder(UUID playerId) {
+        plotBorderEnabled.remove(playerId);
+    }
+
+    /**
      * Disables all borders for a player (called on disconnect).
      */
     public void disableAll(UUID playerId) {
         townBorderEnabled.remove(playerId);
         chunkBorderEnabled.remove(playerId);
+        plotBorderEnabled.remove(playerId);
     }
 
     /**
@@ -108,5 +147,12 @@ public class TownBorderManager {
      */
     public Set<UUID> getPlayersWithChunkBorders() {
         return Set.copyOf(chunkBorderEnabled);
+    }
+
+    /**
+     * Gets all players with plot borders enabled.
+     */
+    public Set<UUID> getPlayersWithPlotBorders() {
+        return Set.copyOf(plotBorderEnabled);
     }
 }

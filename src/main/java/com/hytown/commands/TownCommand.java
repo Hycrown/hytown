@@ -145,7 +145,7 @@ public class TownCommand extends AbstractPlayerCommand {
             case "rename" -> handleRename(playerData, playerId, playerName, arg1);
             case "roads" -> handleRoads(playerData, playerId);
             case "nameroad" -> handleNameRoad(playerData, playerId, arg1, arg2);
-            case "border" -> handleBorder(playerData, playerId);
+            case "border" -> handleBorder(playerData, playerId, arg1);
             case "chunkborders" -> handleChunkBorders(playerData, playerId);
             default -> showHelp(playerData, isAdmin);
         }
@@ -1453,17 +1453,32 @@ public class TownCommand extends AbstractPlayerCommand {
     // ==================== BORDER VISUALIZATION COMMANDS ====================
 
     /**
-     * Toggles town border visualization (Hytale selection tool style).
+     * Toggles border visualization.
+     * /town border - toggle town borders
+     * /town border plot - toggle personal plot borders
      */
-    private void handleBorder(PlayerRef playerData, UUID playerId) {
-        boolean enabled = plugin.getBorderManager().toggleTownBorder(playerId);
-        if (enabled) {
-            playerData.sendMessage(Message.raw("Town borders: ON").color(GREEN));
-            playerData.sendMessage(Message.raw("You will see visual borders around your town claims.").color(GRAY));
+    private void handleBorder(PlayerRef playerData, UUID playerId, String subCommand) {
+        if (subCommand != null && subCommand.equalsIgnoreCase("plot")) {
+            // Toggle plot (personal claim) borders
+            boolean enabled = plugin.getBorderManager().togglePlotBorder(playerId);
+            if (enabled) {
+                playerData.sendMessage(Message.raw("Plot borders: ON").color(GREEN));
+                playerData.sendMessage(Message.raw("You will see visual borders around your personal claims.").color(GRAY));
+            } else {
+                playerData.sendMessage(Message.raw("Plot borders: OFF").color(YELLOW));
+            }
         } else {
-            playerData.sendMessage(Message.raw("Town borders: OFF").color(YELLOW));
+            // Toggle town borders (default)
+            boolean enabled = plugin.getBorderManager().toggleTownBorder(playerId);
+            if (enabled) {
+                playerData.sendMessage(Message.raw("Town borders: ON").color(GREEN));
+                playerData.sendMessage(Message.raw("You will see visual borders around your town claims.").color(GRAY));
+            } else {
+                playerData.sendMessage(Message.raw("Town borders: OFF").color(YELLOW));
+            }
         }
     }
+
 
     /**
      * Toggles chunk border visualization (shows all chunk boundaries).
@@ -1494,6 +1509,7 @@ public class TownCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("/town unclaim - Unclaim chunk (requires confirm)").color(WHITE));
         playerData.sendMessage(Message.raw("/town here - Show who owns current chunk").color(WHITE));
         playerData.sendMessage(Message.raw("/town border - Toggle town border visualization").color(WHITE));
+        playerData.sendMessage(Message.raw("/town border plot - Toggle personal plot border visualization").color(WHITE));
         playerData.sendMessage(Message.raw("/town chunkborders - Toggle chunk boundary lines").color(WHITE));
 
         // Members

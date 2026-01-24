@@ -180,6 +180,22 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
                     statusIsError = true;
                 }
             }
+case "set_road_speed" -> {
+                try {
+                    double value = Double.parseDouble(inputValue);
+                    if (value < 1.0) {
+                        statusMessage = "Speed must be >= 1.0!";
+                        statusIsError = true;
+                    } else {
+                        config.setRoadSpeedMultiplier(value);
+                        statusMessage = "Road speed multiplier set to " + value + "x";
+                        statusIsError = false;
+                    }
+                } catch (NumberFormatException e) {
+                    statusMessage = "Invalid number!";
+                    statusIsError = true;
+                }
+            }
 
             // Wild Protection Settings
             case "toggle_wild" -> {
@@ -421,6 +437,9 @@ public class TownAdminGui extends InteractiveCustomUIPage<TownAdminGui.AdminData
                 EventData.of("Action", "set_upkeep_per_plot"), false);
         evt.addEventBinding(CustomUIEventBindingType.Activating, "#SetUpkeepHourBtn",
                 EventData.of("Action", "set_upkeep_hour"), false);
+cmd.set("#RoadSpeedValue.Text", String.format("%.1fx", config.getRoadSpeedMultiplier()));
+        evt.addEventBinding(CustomUIEventBindingType.Activating, "#SetRoadSpeedBtn",
+                EventData.of("Action", "set_road_speed"), false);
     }
 
     private void buildWildPanel(UICommandBuilder cmd, UIEventBuilder evt, PluginConfig config) {

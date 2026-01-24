@@ -82,7 +82,7 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
             case "wild" -> handleWild(playerData, arg1, arg2);
             case "debug" -> handleDebug(playerData);
             case "save" -> handleSave(playerData);
-            case "set" -> handleSet(playerData, arg1, arg2);
+            case "set" -> handleSet(store, playerRef, playerData, world, arg1, arg2);
             case "restore" -> handleRestore(playerData, arg1, arg2);
             case "backups" -> handleBackups(playerData, arg1);
             case "backup" -> handleBackupNow(playerData);
@@ -433,9 +433,10 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("All data saved!").color(GREEN));
     }
 
-    private void handleSet(PlayerRef playerData, String setting, String value) {
+    private void handleSet(Store<EntityStore> store, Ref<EntityStore> playerRef,
+                       PlayerRef playerData, World world, String setting, String value) {
         if (setting == null || setting.isEmpty()) {
-            playerData.sendMessage(Message.raw("Usage: /townadmin set <towncost|claimcost|wildminy> <value>").color(RED));
+            playerData.sendMessage(Message.raw("Usage: /townadmin set <towncost|claimcost|wildminy|pvp> <value>").color(RED));
             return;
         }
 
@@ -480,6 +481,47 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
                 } catch (NumberFormatException e) {
                     playerData.sendMessage(Message.raw("Invalid Y level!").color(RED));
                 }
+            }
+            case "pvp" -> {
+                // Get player's current position to find the town
+                TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
+                if (transform == null) {
+                    playerData.sendMessage(Message.raw("Could not get position!").color(RED));
+                    return;
+                }
+                double posX = transform.getPosition().getX();
+                double posZ = transform.getPosition().getZ();
+                int chunkX = ChunkUtil.toChunkX(posX);
+                int chunkZ = ChunkUtil.toChunkZ(posZ);
+                String worldName = world.getName();
+                String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+                TownStorage townStorage = plugin.getTownStorage();
+                Town town = townStorage.getTownByClaimKey(claimKey);
+                if (town == null) {
+                    playerData.sendMessage(Message.raw("You are not standing in a town claim!").color(RED));
+                    return;
+                }
+
+                if (value == null || value.isEmpty()) {
+                    // Show current PVP state
+                    boolean pvpEnabled = town.getSettings().isPvpEnabled();
+                    playerData.sendMessage(Message.raw("PvP in " + town.getName() + ": " + (pvpEnabled ? "ON" : "OFF")).color(WHITE));
+                    playerData.sendMessage(Message.raw("Usage: /townadmin set pvp <on|off>").color(GRAY));
+                    return;
+                }
+
+                boolean enable = value.equalsIgnoreCase("on") || value.equalsIgnoreCase("true") || value.equals("1");
+                boolean disable = value.equalsIgnoreCase("off") || value.equalsIgnoreCase("false") || value.equals("0");
+
+                if (!enable && !disable) {
+                    playerData.sendMessage(Message.raw("Invalid value! Use: on/off").color(RED));
+                    return;
+                }
+
+                town.getSettings().setPvpEnabled(enable);
+                townStorage.saveTown(town);
+                playerData.sendMessage(Message.raw("[ADMIN] PvP in " + town.getName() + " set to " + (enable ? "ON" : "OFF")).color(GOLD));
             }
             default -> playerData.sendMessage(Message.raw("Unknown setting: " + setting).color(RED));
         }
