@@ -94,6 +94,8 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
             case "leave" -> handleAdminLeave(playerData, playerData.getUuid());
             case "claimroad" -> handleClaimRoad(store, playerRef, playerData, playerData.getUuid(), world, arg1, arg2);
             case "claimrect" -> handleClaimRect(store, playerRef, playerData, playerData.getUuid(), world, arg1);
+            case "claim" -> handleAdminClaim(store, playerRef, playerData, world, arg1);
+            case "unclaim" -> handleAdminUnclaim(store, playerRef, playerData, world);
             default -> showHelp(playerData);
         }
     }
@@ -868,12 +870,14 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
 
         // Admin Claiming
         playerData.sendMessage(Message.raw("--- Admin Claiming ---").color(GOLD));
+        playerData.sendMessage(Message.raw("/townadmin claim [townname]").color(WHITE));
+        playerData.sendMessage(Message.raw("  Claim current chunk for town (free, no limits)").color(GRAY));
+        playerData.sendMessage(Message.raw("/townadmin unclaim").color(WHITE));
+        playerData.sendMessage(Message.raw("  Force unclaim current chunk from any town").color(GRAY));
         playerData.sendMessage(Message.raw("/townadmin claimroad <dir> <name>").color(WHITE));
         playerData.sendMessage(Message.raw("  Claim road 50k blocks in direction (n/s/e/w/all)").color(GRAY));
-        playerData.sendMessage(Message.raw("  Creates NPC-controlled road for your town").color(GRAY));
         playerData.sendMessage(Message.raw("/townadmin claimrect <size>").color(WHITE));
         playerData.sendMessage(Message.raw("  Claim NxN rectangle from current position").color(GRAY));
-        playerData.sendMessage(Message.raw("  Must stand in your town's territory").color(GRAY));
     }
 
     // ==================== ADMIN TOWN MEMBERSHIP COMMANDS ====================
@@ -1376,5 +1380,148 @@ public class TownyAdminCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("  Skipped: " + skipped + " chunks (other town claims)").color(YELLOW));
         playerData.sendMessage(Message.raw("  Town Claims: " + town.getClaimCount() + " total").color(WHITE));
         playerData.sendMessage(Message.raw("  Cost: FREE (admin bypass)").color(GRAY));
+    }
+
+    // ==================== ADMIN CLAIM/UNCLAIM COMMANDS ====================
+
+    /**
+     * Admin claims the current chunk for a specified town.
+     * Usage: /townadmin claim [townname]
+     * If no town specified, uses admin's current town.
+     * Bypasses all costs and limits.
+     */
+    private void handleAdminClaim(Store<EntityStore> store, Ref<EntityStore> playerRef,
+                                   PlayerRef playerData, World world, String townName) {
+        TownStorage townStorage = plugin.getTownStorage();
+
+        // Get target town
+        Town town;
+        if (townName == null || townName.isEmpty()) {
+            // Use admin's current town
+            town = townStorage.getPlayerTown(playerData.getUuid());
+            if (town == null) {
+                playerData.sendMessage(Message.raw("[ADMIN] Usage: /townadmin claim <townname>").color(YELLOW));
+                playerData.sendMessage(Message.raw("  Or join a town first with /townadmin join <town>").color(GRAY));
+                return;
+            }
+        } else {
+            town = townStorage.getTown(townName);
+            if (town == null) {
+                playerData.sendMessage(Message.raw("[ADMIN] Town '" + townName + "' not found!").color(RED));
+                return;
+            }
+        }
+
+        // Get player position
+        TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
+        if (transform == null) {
+            playerData.sendMessage(Message.raw("[ADMIN] Could not get position!").color(RED));
+            return;
+        }
+        double posX = transform.getPosition().getX();
+        double posZ = transform.getPosition().getZ();
+        int chunkX = ChunkUtil.toChunkX(posX);
+        int chunkZ = ChunkUtil.toChunkZ(posZ);
+        String worldName = world.getName();
+        String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+        // Check if already claimed by this town
+        if (town.ownsClaim(claimKey)) {
+            playerData.sendMessage(Message.raw("[ADMIN] This chunk is already claimed by " + town.getName()).color(YELLOW));
+            return;
+        }
+
+        // Check if claimed by another town
+        Town existingTown = townStorage.getTownByClaimKey(claimKey);
+        if (existingTown != null) {
+            playerData.sendMessage(Message.raw("[ADMIN] This chunk is claimed by: " + existingTown.getName()).color(RED));
+            playerData.sendMessage(Message.raw("  Use /townadmin unclaim first to remove it").color(GRAY));
+            return;
+        }
+
+        // Check if personal claim
+        UUID personalOwner = plugin.getClaimManager().getOwnerAt(worldName, posX, posZ);
+        if (personalOwner != null) {
+            String ownerName = plugin.getClaimStorage().getPlayerName(personalOwner);
+            playerData.sendMessage(Message.raw("[ADMIN] This chunk is a personal claim by: " + ownerName).color(RED));
+            playerData.sendMessage(Message.raw("  Personal claims must be removed by the owner").color(GRAY));
+            return;
+        }
+
+        // Claim it for the town (admin bypasses costs and limits)
+        town.addClaim(claimKey);
+        townStorage.indexClaim(claimKey, town.getName());
+        townStorage.saveTown(town);
+
+        // Refresh map
+        plugin.refreshWorldMapChunk(worldName, chunkX, chunkZ);
+
+        playerData.sendMessage(Message.raw("[ADMIN] Claimed chunk [" + chunkX + ", " + chunkZ + "] for " + town.getName()).color(GREEN));
+        playerData.sendMessage(Message.raw("  Town now has " + town.getClaimCount() + " claims").color(GRAY));
+    }
+
+    /**
+     * Admin unclaims the current chunk from whatever town owns it.
+     * Usage: /townadmin unclaim
+     * Works on any town's claims (not personal claims).
+     */
+    private void handleAdminUnclaim(Store<EntityStore> store, Ref<EntityStore> playerRef,
+                                     PlayerRef playerData, World world) {
+        TownStorage townStorage = plugin.getTownStorage();
+
+        // Get player position
+        TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
+        if (transform == null) {
+            playerData.sendMessage(Message.raw("[ADMIN] Could not get position!").color(RED));
+            return;
+        }
+        double posX = transform.getPosition().getX();
+        double posZ = transform.getPosition().getZ();
+        int chunkX = ChunkUtil.toChunkX(posX);
+        int chunkZ = ChunkUtil.toChunkZ(posZ);
+        String worldName = world.getName();
+        String claimKey = worldName + ":" + chunkX + "," + chunkZ;
+
+        // Check if claimed by a town
+        Town town = townStorage.getTownByClaimKey(claimKey);
+        if (town == null) {
+            // Check if personal claim
+            UUID personalOwner = plugin.getClaimManager().getOwnerAt(worldName, posX, posZ);
+            if (personalOwner != null) {
+                String ownerName = plugin.getClaimStorage().getPlayerName(personalOwner);
+                playerData.sendMessage(Message.raw("[ADMIN] This is a personal claim by: " + ownerName).color(RED));
+                playerData.sendMessage(Message.raw("  Use /townadmin player " + ownerName + " to manage").color(GRAY));
+            } else {
+                playerData.sendMessage(Message.raw("[ADMIN] This chunk is not claimed by any town").color(YELLOW));
+            }
+            return;
+        }
+
+        String townName = town.getName();
+
+        // Check if it's a road claim
+        boolean wasRoad = town.isRoadClaim(claimKey);
+        if (wasRoad) {
+            town.removeClaimFromRoad(claimKey);
+        }
+
+        // Remove the claim
+        town.removeClaim(claimKey);
+        townStorage.unindexClaim(claimKey);
+        townStorage.saveTown(town);
+
+        // Fire TownUnclaimEvent
+        com.hytown.events.TownUnclaimEvent unclaimEvent = new com.hytown.events.TownUnclaimEvent(
+                town, claimKey, worldName, chunkX, chunkZ, playerData.getUuid(), playerData.getUsername());
+        plugin.getEventBus().fire(unclaimEvent);
+
+        // Refresh map
+        plugin.refreshWorldMapChunk(worldName, chunkX, chunkZ);
+
+        playerData.sendMessage(Message.raw("[ADMIN] Unclaimed chunk [" + chunkX + ", " + chunkZ + "] from " + townName).color(GREEN));
+        if (wasRoad) {
+            playerData.sendMessage(Message.raw("  (Was a road claim)").color(GRAY));
+        }
+        playerData.sendMessage(Message.raw("  Town now has " + town.getClaimCount() + " claims").color(GRAY));
     }
 }
