@@ -547,7 +547,7 @@ Group {        LayoutMode: Left;        Anchor: (Bottom: 8);        Label {     
     Group #ClaimPanel {
       LayoutMode: TopScrolling;
       ScrollbarStyle: $C.@DefaultScrollbarStyle;
-      FlexWeight: 1;
+      Anchor: (Height: 500);
 
       Label {
         Text: "Admin Claiming";
