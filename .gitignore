@@ -1,21 +1,3 @@
-# Build output
+libs/
+lib/
 target/
-
-# Local dependencies (but keep HytaleServer.jar for CI)
-lib/*.jar
-!lib/HytaleServer.jar
-
-# IDE
-.idea/
-*.iml
-.vscode/
-.project
-.classpath
-.settings/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
